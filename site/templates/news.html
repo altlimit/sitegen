@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    {{template "head" .}}
+</head>
+
+<body>
+    <div class="bg-blue-800 p-6">
+        <div class="bg-white flex flex-col font-sans">
+            <div class="container mx-auto px-8">
+                {{template "nav" .}}
+                <div class="p-6">
+                    {{template "content" .}}
+                    {{template "related" .}}
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
+
+{{define "related"}}
+<p class="p-6 mt-4 bg-yellow-200">Default Related</p>
+{{end}}

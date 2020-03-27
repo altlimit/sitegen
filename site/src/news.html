@@ -1,0 +1,21 @@
+---
+template: main.html
+title: News
+---
+
+{{define "content"}}
+<h1>
+    News
+</h1>
+
+<div class="my-8">
+    {{range .Sources | filter "Path" "/news/*" | sort "Meta.date" "desc"}}
+    <div class="border shadow m-2 p-4">
+        <a href="{{.Path}}">
+            {{index .Meta "title"}}
+        </a>
+        <p>{{index .Meta "summary"}}</p>
+    </div>
+    {{end}}
+</div>
+{{end}}

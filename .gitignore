@@ -1,0 +1,9 @@
+.vscode
+.DS_Store
+
+build
+public
+
+*.exe
+__debug_bin
+debug.test
