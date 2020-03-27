@@ -59,7 +59,7 @@ func main() {
 			if s.Path != "" {
 				out[s.ext()[1:]]++
 				if err := s.build(publicDir, ss); err != nil {
-					log.Fatalln(err)
+					log.Println("Build failed", s.LocalPath, err)
 				}
 			}
 		}
