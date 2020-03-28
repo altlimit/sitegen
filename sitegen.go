@@ -39,11 +39,17 @@ func (s *Source) build(outputDir string, sources []Source) error {
 
 	switch s.ext() {
 	case ".html", ".htm":
-		if err := os.MkdirAll(filepath.Join(outputDir, s.Path), os.ModePerm); err != nil {
+		_, withPath := s.Meta["path"]
+		sDir := filepath.Join(outputDir, s.Path)
+		fName := "index.html"
+		if withPath {
+			sDir, fName = filepath.Split(sDir)
+		}
+		if err := os.MkdirAll(sDir, os.ModePerm); err != nil {
 			return err
 		}
 
-		dstPath := filepath.Join(outputDir, s.Path, "index.html")
+		dstPath := filepath.Join(sDir, fName)
 		dstFile, err := os.Create(dstPath)
 		if err != nil {
 			return err
@@ -196,6 +202,10 @@ func loadSources(path, baseDir string) (Source, error) {
 		if c, _ := parseContent(content, "---"); c != nil {
 			if err := yaml.Unmarshal(c, &source.Meta); err != nil {
 				return source, err
+			}
+
+			if p, ok := source.Meta["path"]; ok {
+				source.Path = p.(string)
 			}
 		}
 	}

@@ -27,6 +27,7 @@ func main() {
 		publicDir string
 		sourceDir string
 		port      string
+		clean     bool
 		ss        *staticServer
 	)
 	flag.StringVar(&publicDir, "public", "./public", "Public directory")
@@ -34,6 +35,7 @@ func main() {
 	flag.StringVar(&dataDir, "data", "./data", "Data directory")
 	flag.StringVar(&templateDir, "templates", "./templates", "Template directory")
 	flag.BoolVar(&serving, "serve", os.Getenv("SERVE") == "1", "Watch for changes & serve")
+	flag.BoolVar(&clean, "clean", os.Getenv("CLEAN") == "1", "Clean public dir before build")
 	flag.StringVar(&port, "port", "8888", "Port for localhost")
 	flag.Parse()
 
