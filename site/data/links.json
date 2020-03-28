@@ -9,5 +9,9 @@
     {
         "path": "/news",
         "name": "News"
+    },
+    {
+        "path": "/contact",
+        "name": "Contact"
     }
 ]
