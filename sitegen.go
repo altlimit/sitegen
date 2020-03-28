@@ -66,11 +66,11 @@ func (s *Source) build(outputDir string, sources []Source) error {
 
 		tmpl := template.New(filepath.Base(tplPath))
 		tmpl = tmpl.Funcs(map[string]interface{}{
-			"sort":     sortBy,
-			"limit":    limit,
-			"offset":   offset,
-			"filter":   filter,
-			"loadData": loadData,
+			"sort":   sortBy,
+			"limit":  limit,
+			"offset": offset,
+			"filter": filter,
+			"data":   loadData,
 		})
 
 		tmpl, err = tmpl.ParseFiles(templates...)
