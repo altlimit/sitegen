@@ -134,6 +134,7 @@ func (s *Source) build(outputDir string, sources []Source) error {
 				} else if v, ok := exec["build"]; ok {
 					go runCommand(v.(string))
 				}
+				return nil
 			} else if min != nil && (ext == ".js" || ext == ".css") {
 				if ctype, ok := parseExtensions[ext]; ok {
 					b, err := min.Bytes(ctype, src)

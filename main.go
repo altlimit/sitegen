@@ -50,8 +50,10 @@ func main() {
 	flag.StringVar(&port, "port", "8888", "Port for localhost")
 	flag.Parse()
 
-	if err := os.RemoveAll(publicDir); err != nil {
-		log.Fatalln(err)
+	if clean {
+		if err := os.RemoveAll(publicDir); err != nil {
+			log.Fatalln(err)
+		}
 	}
 
 	if withMinify {
