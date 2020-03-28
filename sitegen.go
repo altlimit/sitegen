@@ -226,6 +226,9 @@ func localToRemote(path string) string {
 	switch ext := fileExt(path); ext {
 	case ".html", ".htm":
 		path = strings.TrimSuffix(path, ext)
+		if strings.HasSuffix(path, "index") {
+			path = strings.TrimSuffix(path, "index")
+		}
 	}
 	path = strings.ReplaceAll(path, "\\", "/")
 	return "/" + strings.TrimPrefix(path, "/")

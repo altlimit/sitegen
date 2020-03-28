@@ -115,8 +115,8 @@ func TestLocalToRemote(t *testing.T) {
 		local string
 		want  string
 	}{
-		{"index.html", "/index"},
-		{"/hello/index.html", "/hello/index"},
+		{"index.html", "/"},
+		{"/hello/index.html", "/hello/"},
 		{"news.html", "/news"},
 		{"/css/style.css", "/css/style.css"},
 		{"logo.png", "/logo.png"},

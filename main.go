@@ -103,6 +103,7 @@ func main() {
 			mu.Lock()
 			delete(events, path)
 			mu.Unlock()
+			cmdWG.Wait()
 			ss.notifier <- []byte("updated")
 		}
 
