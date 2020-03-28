@@ -15,16 +15,21 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+var (
+	parseExtensions = map[string]bool{
+		".css":  true,
+		".js":   true,
+		".htm":  true,
+		".html": true,
+	}
+)
+
 // Source represents a resource
 type Source struct {
 	Children  []Source
 	LocalPath string
 	Path      string
 	Meta      map[string]interface{}
-}
-
-func (s *Source) ext() string {
-	return strings.ToLower(filepath.Ext(s.LocalPath))
 }
 
 func (s *Source) build(outputDir string, sources []Source) error {
@@ -37,7 +42,8 @@ func (s *Source) build(outputDir string, sources []Source) error {
 		return err
 	}
 
-	switch s.ext() {
+	ext := fileExt(s.LocalPath)
+	switch ext {
 	case ".html", ".htm":
 		_, withPath := s.Meta["path"]
 		sDir := filepath.Join(outputDir, s.Path)
@@ -100,19 +106,20 @@ func (s *Source) build(outputDir string, sources []Source) error {
 		if err := tmpl.Execute(dstFile, tplData); err != nil {
 			return err
 		}
-
 	default:
-		if c, _ := parseContent(src, "---"); c != nil {
-			exec := make(map[string]interface{})
-			if err := yaml.Unmarshal(c, &exec); err != nil {
-				return err
-			}
-			if serving {
-				if v, ok := exec["serve"]; ok {
+		if _, ok := parseExtensions[ext]; ok {
+			if c, _ := parseContent(src, "---"); c != nil {
+				exec := make(map[string]interface{})
+				if err := yaml.Unmarshal(c, &exec); err != nil {
+					return err
+				}
+				if serving {
+					if v, ok := exec["serve"]; ok {
+						go runCommand(v.(string))
+					}
+				} else if v, ok := exec["build"]; ok {
 					go runCommand(v.(string))
 				}
-			} else if v, ok := exec["build"]; ok {
-				go runCommand(v.(string))
 			}
 		}
 		if err := os.MkdirAll(filepath.Join(outputDir, filepath.Dir(s.Path)), os.ModePerm); err != nil {
@@ -199,13 +206,15 @@ func loadSources(path, baseDir string) (Source, error) {
 		if err != nil {
 			return source, err
 		}
-		if c, _ := parseContent(content, "---"); c != nil {
-			if err := yaml.Unmarshal(c, &source.Meta); err != nil {
-				return source, err
-			}
+		if _, ok := parseExtensions[fileExt(source.LocalPath)]; ok {
+			if c, _ := parseContent(content, "---"); c != nil {
+				if err := yaml.Unmarshal(c, &source.Meta); err != nil {
+					return source, err
+				}
 
-			if p, ok := source.Meta["path"]; ok {
-				source.Path = p.(string)
+				if p, ok := source.Meta["path"]; ok {
+					source.Path = p.(string)
+				}
 			}
 		}
 	}
@@ -214,7 +223,7 @@ func loadSources(path, baseDir string) (Source, error) {
 }
 
 func localToRemote(path string) string {
-	switch ext := strings.ToLower(filepath.Ext(path)); ext {
+	switch ext := fileExt(path); ext {
 	case ".html", ".htm":
 		path = strings.TrimSuffix(path, ext)
 	}
@@ -314,4 +323,8 @@ func loadData(name string) interface{} {
 		return nil
 	}
 	return d
+}
+
+func fileExt(p string) string {
+	return strings.ToLower(filepath.Ext(p))
 }

@@ -49,7 +49,7 @@ func main() {
 		out := make(map[string]int)
 		baseSource, err := loadSources(p, sourceDir)
 		if err != nil {
-			log.Fatalln(err)
+			log.Fatalln("Load", p, "failed", err)
 		}
 
 		sources := baseSource.sources()
@@ -62,7 +62,7 @@ func main() {
 		}
 		for _, s := range sources {
 			if s.Path != "" {
-				out[s.ext()[1:]]++
+				out[fileExt(s.LocalPath)[1:]]++
 				if err := s.build(publicDir, ss); err != nil {
 					log.Println("Build failed", s.LocalPath, err)
 				}
