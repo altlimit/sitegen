@@ -102,6 +102,7 @@ func (s *Source) build(outputDir string, sources []Source) error {
 		for k, v := range s.Meta {
 			tplData[k] = v
 		}
+		tplData["Dev"] = serving
 		tplData["Source"] = s
 		tplData["Sources"] = sources
 		tplBuf := new(bytes.Buffer)
