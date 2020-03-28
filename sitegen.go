@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -16,11 +17,11 @@ import (
 )
 
 var (
-	parseExtensions = map[string]bool{
-		".css":  true,
-		".js":   true,
-		".htm":  true,
-		".html": true,
+	parseExtensions = map[string]string{
+		".css":  "text/css",
+		".js":   "application/js",
+		".htm":  "text/html",
+		".html": "text/html",
 	}
 )
 
@@ -78,11 +79,12 @@ func (s *Source) build(outputDir string, sources []Source) error {
 
 		tmpl := template.New(filepath.Base(tplPath))
 		tmpl = tmpl.Funcs(map[string]interface{}{
-			"sort":   sortBy,
-			"limit":  limit,
-			"offset": offset,
-			"filter": filter,
-			"data":   loadData,
+			"sort":     sortBy,
+			"limit":    limit,
+			"offset":   offset,
+			"filter":   filter,
+			"data":     loadData,
+			"escapeJS": escapeJS,
 		})
 
 		tmpl, err = tmpl.ParseFiles(templates...)
@@ -102,8 +104,20 @@ func (s *Source) build(outputDir string, sources []Source) error {
 		}
 		tplData["Source"] = s
 		tplData["Sources"] = sources
-
-		if err := tmpl.Execute(dstFile, tplData); err != nil {
+		tplBuf := new(bytes.Buffer)
+		if err := tmpl.Execute(tplBuf, tplData); err != nil {
+			return err
+		}
+		body := tplBuf.Bytes()
+		if min != nil {
+			b, err := min.Bytes("text/html", body)
+			if err != nil {
+				return err
+			}
+			body = b
+		}
+		_, err = dstFile.Write(body)
+		if err != nil {
 			return err
 		}
 	default:
@@ -119,6 +133,14 @@ func (s *Source) build(outputDir string, sources []Source) error {
 					}
 				} else if v, ok := exec["build"]; ok {
 					go runCommand(v.(string))
+				}
+			} else if min != nil && (ext == ".js" || ext == ".css") {
+				if ctype, ok := parseExtensions[ext]; ok {
+					b, err := min.Bytes(ctype, src)
+					if err != nil {
+						return err
+					}
+					src = b
 				}
 			}
 		}
@@ -330,4 +352,16 @@ func loadData(name string) interface{} {
 
 func fileExt(p string) string {
 	return strings.ToLower(filepath.Ext(p))
+}
+
+func escapeJS(js interface{}) template.JS {
+	var s string
+	b, err := json.Marshal(js)
+	if err != nil {
+		log.Println("escapeJS failed", js, err)
+	} else {
+		s = string(b)
+	}
+
+	return template.JS(s)
 }

@@ -8,17 +8,27 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/tdewolff/minify/v2"
+	"github.com/tdewolff/minify/v2/css"
+	"github.com/tdewolff/minify/v2/html"
+	"github.com/tdewolff/minify/v2/js"
+	"github.com/tdewolff/minify/v2/json"
+	"github.com/tdewolff/minify/v2/svg"
+	"github.com/tdewolff/minify/v2/xml"
 )
 
 var (
 	templateDir string
 	dataDir     string
 	serving     bool
+	withMinify  bool
+	min         *minify.M
 	cmdWG       sync.WaitGroup
 )
 
@@ -36,11 +46,23 @@ func main() {
 	flag.StringVar(&templateDir, "templates", "./templates", "Template directory")
 	flag.BoolVar(&serving, "serve", os.Getenv("SERVE") == "1", "Watch for changes & serve")
 	flag.BoolVar(&clean, "clean", os.Getenv("CLEAN") == "1", "Clean public dir before build")
+	flag.BoolVar(&withMinify, "minify", os.Getenv("MINIFY") == "1", "Minify (HTML|JS|CSS)")
 	flag.StringVar(&port, "port", "8888", "Port for localhost")
 	flag.Parse()
 
 	if err := os.RemoveAll(publicDir); err != nil {
 		log.Fatalln(err)
+	}
+
+	if withMinify {
+		min = minify.New()
+		min.AddFunc("text/css", css.Minify)
+		min.AddFunc("application/js", js.Minify)
+		min.AddFunc("text/html", html.Minify)
+		min.AddFunc("image/svg+xml", svg.Minify)
+		min.AddFuncRegexp(regexp.MustCompile("^(application|text)/(x-)?(java|ecma)script$"), js.Minify)
+		min.AddFuncRegexp(regexp.MustCompile("[/+]json$"), json.Minify)
+		min.AddFuncRegexp(regexp.MustCompile("[/+]xml$"), xml.Minify)
 	}
 
 	allSources := make(map[string]Source)
