@@ -17,20 +17,21 @@ import (
 
 var (
 	templateDir string
+	serving     bool
+	cmdWG       sync.WaitGroup
 )
 
 func main() {
 	var (
 		publicDir string
 		sourceDir string
-		serve     bool
 		port      string
 		ss        *staticServer
 	)
 	flag.StringVar(&publicDir, "public", "./public", "Public directory")
 	flag.StringVar(&sourceDir, "source", "./src", "Source directory")
 	flag.StringVar(&templateDir, "templates", "./templates", "Template directory")
-	flag.BoolVar(&serve, "serve", os.Getenv("SERVE") == "1", "Watch for changes & serve")
+	flag.BoolVar(&serving, "serve", os.Getenv("SERVE") == "1", "Watch for changes & serve")
 	flag.StringVar(&port, "port", "8888", "Port for localhost")
 	flag.Parse()
 
@@ -70,7 +71,7 @@ func main() {
 	}
 
 	build("/")
-	if serve {
+	if serving {
 		ss = newStaticServer(publicDir)
 		watcher, err := fsnotify.NewWatcher()
 		var mu sync.Mutex
@@ -150,6 +151,8 @@ func main() {
 		http.Handle("/", ss)
 		log.Println(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
 	}
+
+	cmdWG.Wait()
 }
 
 func folders(dir string) []string {

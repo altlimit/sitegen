@@ -7,3 +7,6 @@ public
 *.exe
 __debug_bin
 debug.test
+
+node_modules
+sitegen

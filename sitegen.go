@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"html/template"
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -74,10 +76,7 @@ func (s *Source) build(outputDir string, sources []Source) error {
 			return err
 		}
 
-		if strings.HasPrefix(string(src), "---") {
-			src = []byte(strings.SplitN(string(src), "---", 3)[2])
-		}
-
+		_, src = parseContent(src, "---")
 		tmpl, err = tmpl.Parse(string(src))
 		if err != nil {
 			return err
@@ -95,6 +94,19 @@ func (s *Source) build(outputDir string, sources []Source) error {
 		}
 
 	default:
+		if c, _ := parseContent(src, "---"); c != nil {
+			exec := make(map[string]interface{})
+			if err := yaml.Unmarshal(c, &exec); err != nil {
+				return err
+			}
+			if serving {
+				if v, ok := exec["serve"]; ok {
+					go runCommand(v.(string))
+				}
+			} else if v, ok := exec["build"]; ok {
+				go runCommand(v.(string))
+			}
+		}
 		if err := os.MkdirAll(filepath.Join(outputDir, filepath.Dir(s.Path)), os.ModePerm); err != nil {
 			return err
 		}
@@ -129,7 +141,7 @@ func (s Source) value(prop string) string {
 		val = filepath.Base(s.LocalPath)
 	default:
 		if strings.HasPrefix(prop, "Meta.") {
-			val = s.Meta[prop[5:]].(string)
+			val = fmt.Sprint(s.Meta[prop[5:]])
 		}
 	}
 	return val
@@ -179,15 +191,9 @@ func loadSources(path, baseDir string) (Source, error) {
 		if err != nil {
 			return source, err
 		}
-		c := string(content)
-		idx := strings.Index(c, "---")
-		if idx >= 0 {
-			c = c[idx+3:]
-			idx = strings.Index(c, "---")
-			if idx >= 0 {
-				if err := yaml.Unmarshal([]byte(c[:idx]), &source.Meta); err != nil {
-					return source, err
-				}
+		if c, _ := parseContent(content, "---"); c != nil {
+			if err := yaml.Unmarshal(c, &source.Meta); err != nil {
+				return source, err
 			}
 		}
 	}
@@ -252,4 +258,33 @@ func filter(prop string, pattern string, sources []Source) []Source {
 	}
 
 	return filtered
+}
+
+func parseContent(content []byte, sep string) ([]byte, []byte) {
+	c := string(content)
+	cc := c
+	idx := strings.Index(c, sep)
+	t := len(sep)
+	if idx >= 0 {
+		c = c[idx+t:]
+		idx = strings.Index(c, sep)
+		if idx >= 0 {
+			c = c[:idx]
+			return []byte(c), []byte(strings.ReplaceAll(cc, sep+c+sep, ""))
+		}
+	}
+	return nil, content
+}
+
+func runCommand(run string) {
+	cmdWG.Add(1)
+	defer cmdWG.Done()
+	c := strings.Split(run, " ")
+	cmd := exec.Command(c[0], c[1:]...)
+	stdout, err := cmd.Output()
+	if err != nil {
+		log.Println(err.Error())
+		return
+	}
+	log.Println(string(stdout))
 }

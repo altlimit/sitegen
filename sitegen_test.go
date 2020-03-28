@@ -20,7 +20,7 @@ func TestFilter(t *testing.T) {
 		key     string
 		want    int
 	}{
-		{"*/promo.svg", "Path", 1},
+		{"/img/promo.svg", "Path", 1},
 		{"/news/*", "Path", 4},
 		{"**about.html", "Filename", 1},
 		{"index.html", "Filename", 1},
@@ -115,11 +115,11 @@ func TestLocalToRemote(t *testing.T) {
 		local string
 		want  string
 	}{
-		{"index.html", "index"},
+		{"index.html", "/index"},
 		{"/hello/index.html", "/hello/index"},
-		{"news.html", "news"},
+		{"news.html", "/news"},
 		{"/css/style.css", "/css/style.css"},
-		{"logo.png", "logo.png"},
+		{"logo.png", "/logo.png"},
 		{"/news/2020.html", "/news/2020"},
 	}
 
@@ -129,6 +129,43 @@ func TestLocalToRemote(t *testing.T) {
 			ans := localToRemote(tt.local)
 			if ans != tt.want {
 				t.Errorf("got %s, want %s", ans, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseContent(t *testing.T) {
+	var tests = []struct {
+		input string
+		sep   string
+		want1 string
+		want2 string
+	}{
+		{"ABC---DEF---GHI", "---", "DEF", "ABCGHI"},
+		{`ABC
+---
+DEF: 123
+---
+GHI`, "---", "\nDEF: 123\n", "ABC\n\nGHI"},
+		{`/*
+---
+serve: npm run build
+build: npm run prod
+---
+*/`, "---", `
+serve: npm run build
+build: npm run prod
+`, "/*\n\n*/"},
+	}
+
+	for _, tt := range tests {
+		testname := fmt.Sprintf("%s", tt.input)
+		t.Run(testname, func(t *testing.T) {
+			ans1, ans2 := parseContent([]byte(tt.input), tt.sep)
+			if string(ans1) != tt.want1 {
+				t.Errorf("got %s, want1 %s", string(ans1), tt.want1)
+			} else if string(ans2) != tt.want2 {
+				t.Errorf("got %s, want2 %s", string(ans2), tt.want2)
 			}
 		})
 	}
