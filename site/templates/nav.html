@@ -1,10 +1,11 @@
 {{define "nav"}}
+{{$links := loadData "links.json"}}
 <header class="flex flex-col sm:flex-row items-center justify-between py-6 relative">
     <h3 class="text-2xl font-bold uppercase text-blue-900"><a href="/">Logo</a></h3>
     <nav class="hidden md:flex text-lg">
-        <a href="/" class="text-gray-800 hover:text-purple-300 py-3 px-6">Home</a>
-        <a href="/about" class="text-gray-800 hover:text-purple-300 py-3 px-6">About</a>
-        <a href="/news" class="text-gray-800 hover:text-purple-300 py-3 px-6">News</a>
+        {{ range $links }}
+        <a href="{{.path}}" class="text-gray-800 hover:text-purple-300 py-3 px-6">{{.name}}</a>
+        {{ end }}
     </nav>
     <button class="flex md:hidden flex-col absolute top-0 right-0 p-4 mt-5">
         <span class="w-5 h-px mb-1 bg-orange-500"></span>

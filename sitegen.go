@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io/ioutil"
@@ -65,10 +66,11 @@ func (s *Source) build(outputDir string, sources []Source) error {
 
 		tmpl := template.New(filepath.Base(tplPath))
 		tmpl = tmpl.Funcs(map[string]interface{}{
-			"sort":   sortBy,
-			"limit":  limit,
-			"offset": offset,
-			"filter": filter,
+			"sort":     sortBy,
+			"limit":    limit,
+			"offset":   offset,
+			"filter":   filter,
+			"loadData": loadData,
 		})
 
 		tmpl, err = tmpl.ParseFiles(templates...)
@@ -287,4 +289,19 @@ func runCommand(run string) {
 		return
 	}
 	log.Println(string(stdout))
+}
+
+func loadData(name string) interface{} {
+	path := filepath.Join(dataDir, name)
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		log.Println("loadData failed", path, err)
+		return nil
+	}
+	var d interface{}
+	if err := json.Unmarshal(data, &d); err != nil {
+		log.Println("loadData unmarshal failed", path, err)
+		return nil
+	}
+	return d
 }

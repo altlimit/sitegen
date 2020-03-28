@@ -17,6 +17,7 @@ import (
 
 var (
 	templateDir string
+	dataDir     string
 	serving     bool
 	cmdWG       sync.WaitGroup
 )
@@ -30,6 +31,7 @@ func main() {
 	)
 	flag.StringVar(&publicDir, "public", "./public", "Public directory")
 	flag.StringVar(&sourceDir, "source", "./src", "Source directory")
+	flag.StringVar(&dataDir, "data", "./data", "Data directory")
 	flag.StringVar(&templateDir, "templates", "./templates", "Template directory")
 	flag.BoolVar(&serving, "serve", os.Getenv("SERVE") == "1", "Watch for changes & serve")
 	flag.StringVar(&port, "port", "8888", "Port for localhost")
@@ -83,13 +85,14 @@ func main() {
 		defer watcher.Close()
 
 		tplDir := filepath.Base(templateDir)
+		dtDir := filepath.Base(dataDir)
 		srcDir := filepath.SplitList(sourceDir)
 		buildPath := func(path string) {
 			time.Sleep(time.Millisecond * 500)
 			ps := string(os.PathSeparator)
 			p := strings.Split(path, ps)
 			p = p[len(srcDir)-1:]
-			if tplDir == p[0] {
+			if tplDir == p[0] || dtDir == p[0] {
 				build("/")
 			} else {
 				build(strings.Join(p[1:], ps))
@@ -139,6 +142,10 @@ func main() {
 		err = watcher.Add(templateDir)
 		if err != nil {
 			log.Println("Template DIR error: ", err)
+		}
+		err = watcher.Add(dataDir)
+		if err != nil {
+			log.Println("Data DIR error: ", err)
 		}
 		for _, folder := range folders(sourceDir) {
 			if err := watcher.Add(folder); err != nil {
