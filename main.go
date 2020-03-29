@@ -87,6 +87,9 @@ func main() {
 			time.Sleep(time.Millisecond * 500)
 			rp := strings.Replace(pp, sg.sitePath, "", 1)
 			if strings.HasPrefix(rp, "/"+sourceDir) {
+				if s, ok := sg.sources[pp]; ok {
+					s.reloadContent()
+				}
 				sg.build(pp)
 				log.Println("Rebuilt: ", rp)
 			} else {

@@ -2,28 +2,16 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 )
 
-func siteSources() []*Source {
-	s, err := loadSources("/", "./site/src")
-	if err != nil {
-		panic(err)
-	}
-	var ss []*Source
-	for _, v := range s.sources() {
-		ss = append(ss, &v)
-	}
-	return ss
-}
-
-func TestSiteGen(t *testing.T) {
-	sg := newSiteGen("./site", "templates", "data", "public", "src", nil, true, true)
-	sg.buildAll()
+func testSiteGen() *SiteGen {
+	return newSiteGen("./site", "templates", "data", "public", "src", nil, true, true)
 }
 
 func TestFilter(t *testing.T) {
-	sources := siteSources()
+	sources := testSiteGen().sourceList()
 	var tests = []struct {
 		pattern string
 		key     string
@@ -49,7 +37,7 @@ func TestFilter(t *testing.T) {
 }
 
 func TestOffset(t *testing.T) {
-	sources := siteSources()
+	sources := testSiteGen().sourceList()
 	total := len(sources)
 	var tests = []struct {
 		offset int
@@ -72,7 +60,7 @@ func TestOffset(t *testing.T) {
 }
 
 func TestLimit(t *testing.T) {
-	sources := siteSources()
+	sources := testSiteGen().sourceList()
 	total := len(sources)
 	var tests = []struct {
 		limit int
@@ -96,7 +84,7 @@ func TestLimit(t *testing.T) {
 }
 
 func TestSort(t *testing.T) {
-	sources := filter("Path", "/news/*", siteSources())
+	sources := filter("Path", "/news/*", testSiteGen().sourceList())
 	var tests = []struct {
 		by    string
 		order string
@@ -120,22 +108,24 @@ func TestSort(t *testing.T) {
 }
 
 func TestLocalToPath(t *testing.T) {
+	sg := testSiteGen()
 	var tests = []struct {
-		local string
-		want  string
+		source *Source
+		want   string
 	}{
-		{"index.html", "/"},
-		{"/hello/index.html", "/hello/"},
-		{"news.html", "/news"},
-		{"/css/style.css", "/css/style.css"},
-		{"logo.png", "/logo.png"},
-		{"/news/2020.html", "/news/2020"},
+		{sg.sources[filepath.Join(sg.sitePath, sg.sourceDir, "index.html")], "/"},
+		{sg.sources[filepath.Join(sg.sitePath, sg.sourceDir, "css", "styles.css")], "/css/styles.css"},
+		{sg.sources[filepath.Join(sg.sitePath, sg.sourceDir, "img", "promo.svg")], "/img/promo.svg"},
+		{sg.sources[filepath.Join(sg.sitePath, sg.sourceDir, "404.html")], "/404.html"},
+		{sg.sources[filepath.Join(sg.sitePath, sg.sourceDir, "news.html")], "/news"},
+		{sg.sources[filepath.Join(sg.sitePath, sg.sourceDir, "contact.html")], "/contact"},
+		{sg.sources[filepath.Join(sg.sitePath, sg.sourceDir, "news", "2020-01-01.html")], "/news/2020-01-01"},
 	}
 
 	for _, tt := range tests {
-		testname := fmt.Sprintf("%s", tt.local)
+		testname := fmt.Sprintf("%s", tt.source.Local)
 		t.Run(testname, func(t *testing.T) {
-			ans := localToPath(tt.local)
+			ans := sg.localToPath(tt.source)
 			if ans != tt.want {
 				t.Errorf("got %s, want %s", ans, tt.want)
 			}
@@ -176,6 +166,25 @@ build: npm run prod
 			} else if string(ans2) != tt.want2 {
 				t.Errorf("got %s, want2 %s", string(ans2), tt.want2)
 			}
+		})
+	}
+}
+
+func TestData(t *testing.T) {
+	sg := testSiteGen()
+	var tests = []struct {
+		data string
+		want int
+	}{
+		{"links.json", 4},
+		{"site.json", 2},
+	}
+
+	for _, tt := range tests {
+		testname := fmt.Sprintf("%s", tt.data)
+		t.Run(testname, func(t *testing.T) {
+			sg.data(tt.data)
+			// todo
 		})
 	}
 }

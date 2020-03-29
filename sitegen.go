@@ -52,8 +52,9 @@ type (
 		Path  string
 		Meta  map[string]interface{}
 
-		ext   string
-		ctype string
+		ext     string
+		ctype   string
+		content []byte
 	}
 )
 
@@ -138,12 +139,15 @@ func (sg *SiteGen) html(s *Source) []byte {
 
 	tpl := template.New(tplName)
 	tpl = tpl.Funcs(map[string]interface{}{
-		"sort":     sortBy,
-		"limit":    limit,
-		"offset":   offset,
-		"filter":   filter,
-		"data":     sg.data,
-		"escapeJS": escapeJS,
+		"sort":      sortBy,
+		"limit":     limit,
+		"offset":    offset,
+		"filter":    filter,
+		"data":      sg.data,
+		"json":      parseJSON,
+		"allowJS":   allowJS,
+		"allowHTML": allowHTML,
+		"allowCSS":  allowCSS,
 	})
 
 	tplFiles, err := filepath.Glob(filepath.Join(sg.sitePath, sg.templateDir, "*.html"))
@@ -281,47 +285,62 @@ func (sg *SiteGen) data(name string) interface{} {
 }
 
 func (sg *SiteGen) localToPath(s *Source) string {
-	path := strings.Replace(s.Local, filepath.Join(sg.sitePath, sg.sourceDir), "", 1)
-	switch s.ext {
-	case ".html", ".htm":
-		path = strings.TrimSuffix(path, s.ext)
-		if strings.HasSuffix(path, "index") {
-			path = strings.TrimSuffix(path, "index")
+	metaPath, ok := s.Meta["path"]
+	var path string
+	if ok {
+		path = fmt.Sprint(metaPath)
+	} else {
+		path = strings.Replace(s.Local, filepath.Join(sg.sitePath, sg.sourceDir), "", 1)
+		switch s.ext {
+		case ".html", ".htm":
+			path = strings.TrimSuffix(path, s.ext)
+			if strings.HasSuffix(path, "index") {
+				path = strings.TrimSuffix(path, "index")
+			}
 		}
+		path = strings.ReplaceAll(path, "\\", "/")
 	}
-	path = strings.ReplaceAll(path, "\\", "/")
+
 	return "/" + strings.TrimPrefix(path, "/")
 }
 
+func (s *Source) reloadContent() []byte {
+	s.content = nil
+	return s.loadContent()
+}
+
 func (s *Source) loadContent() []byte {
-	var (
-		meta    []byte
-		content []byte
-	)
-	c, err := ioutil.ReadFile(s.Local)
-	if err != nil {
-		log.Println("Source loading failed ", err)
-		return nil
-	}
-	_, txtCtype := parseCtype[s.ctype]
-	if txtCtype {
-		meta, content = parseContent(c, "---")
-	} else {
-		content = c
-	}
-	if txtCtype && meta != nil {
-		if err := yaml.Unmarshal(meta, &s.Meta); err != nil {
-			log.Println(s.Local, "meta error", err)
-		} else {
-			// override path
-			if p, ok := s.Meta["path"]; ok {
-				s.Path = fmt.Sprint(p)
-			}
+	if s.content == nil {
+		var (
+			meta    []byte
+			content []byte
+		)
+		c, err := ioutil.ReadFile(s.Local)
+		if err != nil {
+			log.Println("Source loading failed ", err)
+			return nil
 		}
-	} else {
-		s.Meta = make(map[string]interface{})
+		_, txtCtype := parseCtype[s.ctype]
+		if txtCtype {
+			meta, content = parseContent(c, "---")
+		} else {
+			content = c
+		}
+		if txtCtype && meta != nil {
+			if err := yaml.Unmarshal(meta, &s.Meta); err != nil {
+				log.Println(s.Local, "meta error", err)
+			} else {
+				// override path
+				if p, ok := s.Meta["path"]; ok {
+					s.Path = fmt.Sprint(p)
+				}
+			}
+		} else {
+			s.Meta = make(map[string]interface{})
+		}
+		s.content = content
 	}
-	return content
+	return s.content
 }
 
 func (s *Source) value(prop string) string {
@@ -424,14 +443,26 @@ func fileExt(p string) string {
 	return strings.ToLower(filepath.Ext(p))
 }
 
-func escapeJS(js interface{}) template.JS {
+func parseJSON(js interface{}) template.JS {
 	var s string
 	b, err := json.Marshal(js)
 	if err != nil {
-		log.Println("escapeJS failed", js, err)
+		log.Println("allowJS failed", js, err)
 	} else {
 		s = string(b)
 	}
 
 	return template.JS(s)
+}
+
+func allowJS(s string) template.JS {
+	return template.JS(s)
+}
+
+func allowHTML(s string) template.HTML {
+	return template.HTML(s)
+}
+
+func allowCSS(s string) template.CSS {
+	return template.CSS(s)
 }
