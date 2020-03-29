@@ -5,12 +5,21 @@ import (
 	"testing"
 )
 
-func siteSources() []Source {
+func siteSources() []*Source {
 	s, err := loadSources("/", "./site/src")
 	if err != nil {
 		panic(err)
 	}
-	return s.sources()
+	var ss []*Source
+	for _, v := range s.sources() {
+		ss = append(ss, &v)
+	}
+	return ss
+}
+
+func TestSiteGen(t *testing.T) {
+	sg := newSiteGen("./site", "templates", "data", "public", "src", nil, false, true)
+	sg.buildAll()
 }
 
 func TestFilter(t *testing.T) {
@@ -110,7 +119,7 @@ func TestSort(t *testing.T) {
 	}
 }
 
-func TestLocalToRemote(t *testing.T) {
+func TestLocalToPath(t *testing.T) {
 	var tests = []struct {
 		local string
 		want  string
@@ -126,7 +135,7 @@ func TestLocalToRemote(t *testing.T) {
 	for _, tt := range tests {
 		testname := fmt.Sprintf("%s", tt.local)
 		t.Run(testname, func(t *testing.T) {
-			ans := localToRemote(tt.local)
+			ans := localToPath(tt.local)
 			if ans != tt.want {
 				t.Errorf("got %s, want %s", ans, tt.want)
 			}

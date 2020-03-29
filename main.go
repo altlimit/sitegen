@@ -78,7 +78,7 @@ func main() {
 
 		sources := baseSource.sources()
 		for _, s := range sources {
-			allSources[s.LocalPath] = s
+			allSources[s.Local] = s
 		}
 		var ss []Source
 		for _, s := range allSources {
@@ -86,9 +86,9 @@ func main() {
 		}
 		for _, s := range sources {
 			if s.Path != "" {
-				out[fileExt(s.LocalPath)[1:]]++
-				if err := s.build(publicDir, ss); err != nil {
-					log.Println("Build failed", s.LocalPath, err)
+				out[fileExt(s.Local)[1:]]++
+				if err := s.build2(publicDir, ss); err != nil {
+					log.Println("Build failed", s.Local, err)
 				}
 			}
 		}
