@@ -216,11 +216,11 @@ func (sg *SiteGen) build(path string) error {
 		}
 	default:
 		src := s.loadContent()
-		if sg.dev && src != nil {
-			if serve, ok := s.Meta["serve"]; ok {
+		if src != nil {
+			if serve, ok := s.Meta["serve"]; sg.dev && ok {
 				go runCommand(fmt.Sprint(serve))
 				return nil
-			} else if build, ok := s.Meta["build"]; ok {
+			} else if build, ok := s.Meta["build"]; !sg.dev && ok {
 				go runCommand(fmt.Sprint(build))
 				return nil
 			} else if sg.minify != nil && (s.ext == ".js" || s.ext == ".css") {
@@ -232,12 +232,12 @@ func (sg *SiteGen) build(path string) error {
 					src = b
 				}
 			}
-			if err := os.MkdirAll(filepath.Join(sg.sitePath, sg.publicDir, filepath.Dir(s.Path)), os.ModePerm); err != nil {
-				return err
-			}
-			if err := ioutil.WriteFile(filepath.Join(sg.sitePath, sg.publicDir, s.Path), src, os.ModePerm); err != nil {
-				return err
-			}
+		}
+		if err := os.MkdirAll(filepath.Join(sg.sitePath, sg.publicDir, filepath.Dir(s.Path)), os.ModePerm); err != nil {
+			return err
+		}
+		if err := ioutil.WriteFile(filepath.Join(sg.sitePath, sg.publicDir, s.Path), src, os.ModePerm); err != nil {
+			return err
 		}
 	}
 
