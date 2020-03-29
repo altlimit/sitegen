@@ -19,12 +19,6 @@ import (
 )
 
 var (
-	parseExtensions = map[string]string{
-		".css":  "text/css",
-		".js":   "application/js",
-		".htm":  "text/html",
-		".html": "text/html",
-	}
 	parseCtype = map[string]string{
 		"text/css":       ".css",
 		"application/js": ".js",
