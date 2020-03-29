@@ -18,7 +18,7 @@ func siteSources() []*Source {
 }
 
 func TestSiteGen(t *testing.T) {
-	sg := newSiteGen("./site", "templates", "data", "public", "src", nil, false, true)
+	sg := newSiteGen("./site", "templates", "data", "public", "src", nil, true, true)
 	sg.buildAll()
 }
 

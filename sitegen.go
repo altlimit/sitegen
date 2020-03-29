@@ -50,12 +50,10 @@ type (
 		Name  string
 		Local string
 		Path  string
-		Meta  map[string]string
+		Meta  map[string]interface{}
 
-		meta    []byte
-		content []byte
-		ext     string
-		ctype   string
+		ext   string
+		ctype string
 	}
 )
 
@@ -94,6 +92,8 @@ func newSiteGen(sitePath, tplDir, dataDir, pubDir, sourceDir string, min *minify
 				log.Println(path, " failed source ", err)
 				return nil
 			}
+			// load it initially for meta data
+			s.loadContent()
 			sg.sources[path] = s
 			return nil
 		})
@@ -112,31 +112,8 @@ func (sg *SiteGen) newSource(path string) (*Source, error) {
 	}
 	s.Local = p
 	s.Path = sg.localToPath(s)
-	c, err := ioutil.ReadFile(s.Local)
-	if err != nil {
-		return nil, err
-	}
 	if ctype := mime.TypeByExtension(s.ext); ctype != "" {
 		s.ctype = strings.Split(ctype, ";")[0]
-	}
-	_, txtCtype := parseCtype[s.ctype]
-	if txtCtype {
-		s.meta, s.content = parseContent(c, "---")
-	} else {
-		s.meta = nil
-		s.content = c
-	}
-	if txtCtype && s.meta != nil {
-		if err := yaml.Unmarshal(c, &s.Meta); err != nil {
-			log.Println(path, "meta error", err)
-		} else {
-			// override path
-			if p, ok := s.Meta["path"]; ok {
-				s.Path = p
-			}
-		}
-	} else {
-		s.Meta = make(map[string]string)
 	}
 	return s, nil
 }
@@ -150,7 +127,16 @@ func (sg *SiteGen) sourceList() []*Source {
 }
 
 func (sg *SiteGen) html(s *Source) []byte {
-	tpl := template.New(s.Name)
+	content := s.loadContent()
+	if content == nil {
+		return nil
+	}
+	tplName := filepath.Base(s.Local)
+	if n, ok := s.Meta["template"]; ok {
+		tplName = fmt.Sprint(n)
+	}
+
+	tpl := template.New(tplName)
 	tpl = tpl.Funcs(map[string]interface{}{
 		"sort":     sortBy,
 		"limit":    limit,
@@ -170,7 +156,7 @@ func (sg *SiteGen) html(s *Source) []byte {
 		log.Println("Parse template ", s.Local, " error ", err)
 		return nil
 	}
-	tpl, err = tpl.Parse(string(s.content))
+	tpl, err = tpl.Parse(string(content))
 	if err != nil {
 		log.Println("Parse ", s.Local, " error ", err)
 		return nil
@@ -231,17 +217,17 @@ func (sg *SiteGen) build(path string) error {
 			}
 		}
 	default:
-		src := s.content
-		if sg.dev {
+		src := s.loadContent()
+		if sg.dev && src != nil {
 			if serve, ok := s.Meta["serve"]; ok {
-				go runCommand(serve)
+				go runCommand(fmt.Sprint(serve))
 				return nil
 			} else if build, ok := s.Meta["build"]; ok {
-				go runCommand(build)
+				go runCommand(fmt.Sprint(build))
 				return nil
 			} else if sg.minify != nil && (s.ext == ".js" || s.ext == ".css") {
 				if _, ok := parseCtype[s.ctype]; ok {
-					b, err := min.Bytes(s.ctype, src)
+					b, err := sg.minify.Bytes(s.ctype, src)
 					if err != nil {
 						return err
 					}
@@ -261,10 +247,21 @@ func (sg *SiteGen) build(path string) error {
 }
 
 func (sg *SiteGen) buildAll() {
-	for k := range sg.sources {
+	out := make(map[string]int)
+	if sg.clean {
+		if err := os.RemoveAll(filepath.Join(sg.sitePath, sg.publicDir)); err != nil {
+			log.Fatalln("Failed to clean ", sg.publicDir, " error ", err)
+		}
+	}
+	for k, s := range sg.sources {
+		out[s.ext]++
 		if err := sg.build(k); err != nil {
 			log.Println("Build ", k, " error ", err)
 		}
+	}
+	log.Println("Generated:")
+	for k, v := range out {
+		log.Println(k, ":", v)
 	}
 }
 
@@ -296,267 +293,38 @@ func (sg *SiteGen) localToPath(s *Source) string {
 	return "/" + strings.TrimPrefix(path, "/")
 }
 
-func (s *Source) build(outputDir string, sources []Source) error {
-	if s.Path == "" {
+func (s *Source) loadContent() []byte {
+	var (
+		meta    []byte
+		content []byte
+	)
+	c, err := ioutil.ReadFile(s.Local)
+	if err != nil {
+		log.Println("Source loading failed ", err)
 		return nil
 	}
-
-	src, err := ioutil.ReadFile(s.Local)
-	if err != nil {
-		return err
+	_, txtCtype := parseCtype[s.ctype]
+	if txtCtype {
+		meta, content = parseContent(c, "---")
+	} else {
+		content = c
 	}
-
-	ext := fileExt(s.Local)
-	switch ext {
-	case ".html", ".htm":
-		_, withPath := s.Meta["path"]
-		sDir := filepath.Join(outputDir, s.Path)
-		fName := "index.html"
-		if withPath {
-			sDir, fName = filepath.Split(sDir)
-		}
-		if err := os.MkdirAll(sDir, os.ModePerm); err != nil {
-			return err
-		}
-
-		dstPath := filepath.Join(sDir, fName)
-		dstFile, err := os.Create(dstPath)
-		if err != nil {
-			return err
-		}
-		defer dstFile.Close()
-
-		tpl, withTpl := s.Meta["template"]
-
-		templates, err := filepath.Glob(filepath.Join(templateDir, "*.html"))
-		if err != nil {
-			return err
-		}
-
-		var tplPath string
-		if withTpl {
-			tplPath = filepath.Join(templateDir, tpl)
+	if txtCtype && meta != nil {
+		if err := yaml.Unmarshal(meta, &s.Meta); err != nil {
+			log.Println(s.Local, "meta error", err)
 		} else {
-			tplPath = s.Local
-		}
-
-		tmpl := template.New(filepath.Base(tplPath))
-		tmpl = tmpl.Funcs(map[string]interface{}{
-			"sort":     sortBy,
-			"limit":    limit,
-			"offset":   offset,
-			"filter":   filter,
-			"data":     loadData,
-			"escapeJS": escapeJS,
-		})
-
-		tmpl, err = tmpl.ParseFiles(templates...)
-		if err != nil {
-			return err
-		}
-
-		_, src = parseContent(src, "---")
-		tmpl, err = tmpl.Parse(string(src))
-		if err != nil {
-			return err
-		}
-
-		tplData := map[string]interface{}{}
-		for k, v := range s.Meta {
-			tplData[k] = v
-		}
-		tplData["Dev"] = serving
-		tplData["Source"] = s
-		tplData["Sources"] = sources
-		tplBuf := new(bytes.Buffer)
-		if err := tmpl.Execute(tplBuf, tplData); err != nil {
-			return err
-		}
-		body := tplBuf.Bytes()
-		if min != nil {
-			b, err := min.Bytes("text/html", body)
-			if err != nil {
-				return err
-			}
-			body = b
-		}
-		_, err = dstFile.Write(body)
-		if err != nil {
-			return err
-		}
-	default:
-		if _, ok := parseExtensions[ext]; ok {
-			if c, _ := parseContent(src, "---"); c != nil {
-				exec := make(map[string]interface{})
-				if err := yaml.Unmarshal(c, &exec); err != nil {
-					return err
-				}
-				if serving {
-					if v, ok := exec["serve"]; ok {
-						go runCommand(v.(string))
-					}
-				} else if v, ok := exec["build"]; ok {
-					go runCommand(v.(string))
-				}
-				return nil
-			} else if min != nil && (ext == ".js" || ext == ".css") {
-				if ctype, ok := parseExtensions[ext]; ok {
-					b, err := min.Bytes(ctype, src)
-					if err != nil {
-						return err
-					}
-					src = b
-				}
+			// override path
+			if p, ok := s.Meta["path"]; ok {
+				s.Path = fmt.Sprint(p)
 			}
 		}
-		if err := os.MkdirAll(filepath.Join(outputDir, filepath.Dir(s.Path)), os.ModePerm); err != nil {
-			return err
-		}
-		if err := ioutil.WriteFile(filepath.Join(outputDir, s.Path), src, os.ModePerm); err != nil {
-			return err
-		}
+	} else {
+		s.Meta = make(map[string]interface{})
 	}
-
-	return nil
+	return content
 }
 
-func (s *Source) build2(outputDir string, sources []Source) error {
-	if s.Path == "" {
-		return nil
-	}
-
-	src, err := ioutil.ReadFile(s.Local)
-	if err != nil {
-		return err
-	}
-
-	ext := fileExt(s.Local)
-	switch ext {
-	case ".html", ".htm":
-		_, withPath := s.Meta["path"]
-		sDir := filepath.Join(outputDir, s.Path)
-		fName := "index.html"
-		if withPath {
-			sDir, fName = filepath.Split(sDir)
-		}
-		if err := os.MkdirAll(sDir, os.ModePerm); err != nil {
-			return err
-		}
-
-		dstPath := filepath.Join(sDir, fName)
-		dstFile, err := os.Create(dstPath)
-		if err != nil {
-			return err
-		}
-		defer dstFile.Close()
-
-		tpl, withTpl := s.Meta["template"]
-
-		templates, err := filepath.Glob(filepath.Join(templateDir, "*.html"))
-		if err != nil {
-			return err
-		}
-
-		var tplPath string
-		if withTpl {
-			tplPath = filepath.Join(templateDir, tpl)
-		} else {
-			tplPath = s.Local
-		}
-
-		tmpl := template.New(filepath.Base(tplPath))
-		tmpl = tmpl.Funcs(map[string]interface{}{
-			"sort":     sortBy,
-			"limit":    limit,
-			"offset":   offset,
-			"filter":   filter,
-			"data":     loadData,
-			"escapeJS": escapeJS,
-		})
-
-		tmpl, err = tmpl.ParseFiles(templates...)
-		if err != nil {
-			return err
-		}
-
-		_, src = parseContent(src, "---")
-		tmpl, err = tmpl.Parse(string(src))
-		if err != nil {
-			return err
-		}
-
-		tplData := map[string]interface{}{}
-		for k, v := range s.Meta {
-			tplData[k] = v
-		}
-		tplData["Dev"] = serving
-		tplData["Source"] = s
-		tplData["Sources"] = sources
-		tplBuf := new(bytes.Buffer)
-		if err := tmpl.Execute(tplBuf, tplData); err != nil {
-			return err
-		}
-		body := tplBuf.Bytes()
-		if min != nil {
-			b, err := min.Bytes("text/html", body)
-			if err != nil {
-				return err
-			}
-			body = b
-		}
-		_, err = dstFile.Write(body)
-		if err != nil {
-			return err
-		}
-	default:
-		if _, ok := parseExtensions[ext]; ok {
-			if c, _ := parseContent(src, "---"); c != nil {
-				exec := make(map[string]interface{})
-				if err := yaml.Unmarshal(c, &exec); err != nil {
-					return err
-				}
-				if serving {
-					if v, ok := exec["serve"]; ok {
-						go runCommand(v.(string))
-					}
-				} else if v, ok := exec["build"]; ok {
-					go runCommand(v.(string))
-				}
-				return nil
-			} else if min != nil && (ext == ".js" || ext == ".css") {
-				if ctype, ok := parseExtensions[ext]; ok {
-					b, err := min.Bytes(ctype, src)
-					if err != nil {
-						return err
-					}
-					src = b
-				}
-			}
-		}
-		if err := os.MkdirAll(filepath.Join(outputDir, filepath.Dir(s.Path)), os.ModePerm); err != nil {
-			return err
-		}
-		if err := ioutil.WriteFile(filepath.Join(outputDir, s.Path), src, os.ModePerm); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (s Source) children() []Source {
-	children := []Source{}
-	// for _, c := range s.Children {
-	// 	children = append(append(children, c), c.children()...)
-	// }
-	return children
-}
-
-func (s Source) sources() []Source {
-	return append([]Source{s}, s.children()...)
-}
-
-func (s Source) value(prop string) string {
+func (s *Source) value(prop string) string {
 	var val string
 	switch prop {
 	case "Path":
@@ -571,78 +339,6 @@ func (s Source) value(prop string) string {
 		}
 	}
 	return val
-}
-
-func loadSources(path, baseDir string) (Source, error) {
-	fullPath := filepath.Join(baseDir, path)
-	fileInfo, err := os.Stat(fullPath)
-	if err != nil {
-		return Source{}, err
-	}
-	if strings.HasPrefix(fileInfo.Name(), ".") {
-		return Source{}, err
-	}
-
-	source := Source{}
-	if fileInfo.IsDir() {
-		fileInfos, err := ioutil.ReadDir(fullPath)
-		if err != nil {
-			return Source{}, err
-		}
-
-		for _, child := range fileInfos {
-			if isIndex(child) {
-				source.Path = path
-				source.Local = filepath.Join(fullPath, child.Name())
-			} else {
-				childSource, err := loadSources(filepath.Join(path, child.Name()), baseDir)
-				if err != nil {
-					return source, err
-				}
-				if childSource.Local != "" {
-					// source.Children = append(source.Children, childSource)
-				}
-			}
-		}
-
-	} else {
-		source.Path = localToPath(path)
-		source.Local = fullPath
-	}
-
-	if source.Local == "" {
-		source.Local = fullPath
-	} else {
-		content, err := ioutil.ReadFile(source.Local)
-		if err != nil {
-			return source, err
-		}
-		if _, ok := parseExtensions[fileExt(source.Local)]; ok {
-			if c, _ := parseContent(content, "---"); c != nil {
-				if err := yaml.Unmarshal(c, &source.Meta); err != nil {
-					return source, err
-				}
-
-				if p, ok := source.Meta["path"]; ok {
-					source.Path = p
-				}
-			}
-		}
-	}
-
-	return source, nil
-}
-
-func localToPath(path string) string {
-	switch ext := fileExt(path); ext {
-	case ".html", ".htm":
-		path = strings.TrimSuffix(path, ext)
-		if strings.HasSuffix(path, "index") {
-			path = strings.TrimSuffix(path, "index")
-		}
-	}
-	path = strings.ReplaceAll(path, "\\", "/")
-	return "/" + strings.TrimPrefix(path, "/")
 }
 
 func isIndex(fileInfo os.FileInfo) bool {
@@ -722,21 +418,6 @@ func runCommand(run string) {
 		return
 	}
 	log.Println(string(stdout))
-}
-
-func loadData(name string) interface{} {
-	path := filepath.Join(dataDir, name)
-	data, err := ioutil.ReadFile(path)
-	if err != nil {
-		log.Println("loadData failed", path, err)
-		return nil
-	}
-	var d interface{}
-	if err := json.Unmarshal(data, &d); err != nil {
-		log.Println("loadData unmarshal failed", path, err)
-		return nil
-	}
-	return d
 }
 
 func fileExt(p string) string {

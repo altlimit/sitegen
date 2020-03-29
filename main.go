@@ -24,105 +24,73 @@ import (
 )
 
 var (
-	templateDir string
-	dataDir     string
-	serving     bool
-	withMinify  bool
-	min         *minify.M
-	cmdWG       sync.WaitGroup
+	cmdWG   sync.WaitGroup
+	serving bool
 )
 
 func main() {
 	var (
+		sitePath  string
 		publicDir string
 		sourceDir string
+		dataDir   string
+		tplDir    string
 		port      string
 		clean     bool
+		isMinify  bool
+		min       *minify.M
 		ss        *staticServer
+		sg        *SiteGen
 	)
-	flag.StringVar(&publicDir, "public", "./public", "Public directory")
-	flag.StringVar(&sourceDir, "source", "./src", "Source directory")
-	flag.StringVar(&dataDir, "data", "./data", "Data directory")
-	flag.StringVar(&templateDir, "templates", "./templates", "Template directory")
+	flag.StringVar(&sitePath, "site", "./site", "Absolute or relative root site path")
+	flag.StringVar(&publicDir, "public", "public", "Public folder relative to site path")
+	flag.StringVar(&sourceDir, "source", "src", "Source folder relative to site path")
+	flag.StringVar(&dataDir, "data", "data", "Data folder relative to site path")
+	flag.StringVar(&tplDir, "templates", "templates", "Template folder relative to site path")
 	flag.BoolVar(&serving, "serve", os.Getenv("SERVE") == "1", "Watch for changes & serve")
 	flag.BoolVar(&clean, "clean", os.Getenv("CLEAN") == "1", "Clean public dir before build")
-	flag.BoolVar(&withMinify, "minify", os.Getenv("MINIFY") == "1", "Minify (HTML|JS|CSS)")
+	flag.BoolVar(&isMinify, "minify", os.Getenv("MINIFY") == "1", "Minify (HTML|JS|CSS)")
 	flag.StringVar(&port, "port", "8888", "Port for localhost")
 	flag.Parse()
 
-	if clean {
-		if err := os.RemoveAll(publicDir); err != nil {
-			log.Fatalln(err)
-		}
-	}
-
-	if withMinify {
+	if isMinify {
 		min = minify.New()
 		min.AddFunc("text/css", css.Minify)
 		min.AddFunc("application/js", js.Minify)
-		min.AddFunc("text/html", html.Minify)
 		min.AddFunc("image/svg+xml", svg.Minify)
+		min.Add("text/html", &html.Minifier{
+			KeepDocumentTags: true,
+		})
 		min.AddFuncRegexp(regexp.MustCompile("^(application|text)/(x-)?(java|ecma)script$"), js.Minify)
 		min.AddFuncRegexp(regexp.MustCompile("[/+]json$"), json.Minify)
 		min.AddFuncRegexp(regexp.MustCompile("[/+]xml$"), xml.Minify)
 	}
 
-	allSources := make(map[string]Source)
+	sg = newSiteGen(sitePath, tplDir, dataDir, publicDir, sourceDir, min, clean, serving)
+	sg.buildAll()
 
-	build := func(p string) {
-		out := make(map[string]int)
-		baseSource, err := loadSources(p, sourceDir)
-		if err != nil {
-			log.Fatalln("Load", p, "failed", err)
-		}
-
-		sources := baseSource.sources()
-		for _, s := range sources {
-			allSources[s.Local] = s
-		}
-		var ss []Source
-		for _, s := range allSources {
-			ss = append(ss, s)
-		}
-		for _, s := range sources {
-			if s.Path != "" {
-				out[fileExt(s.Local)[1:]]++
-				if err := s.build2(publicDir, ss); err != nil {
-					log.Println("Build failed", s.Local, err)
-				}
-			}
-		}
-		log.Println("Generated:")
-		for k, v := range out {
-			log.Println(k, ":", v)
-		}
-	}
-
-	build("/")
 	if serving {
-		ss = newStaticServer(publicDir)
+		ss = newStaticServer(filepath.Join(sg.sitePath, publicDir))
 		watcher, err := fsnotify.NewWatcher()
 		var mu sync.Mutex
 		events := make(map[string]bool)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal("Watcher error", err)
 		}
-
 		defer watcher.Close()
 
-		tplDir := filepath.Base(templateDir)
-		dtDir := filepath.Base(dataDir)
-		srcDir := filepath.SplitList(sourceDir)
 		buildPath := func(path string) {
+			pp, err := filepath.Abs(path)
+			if err != nil {
+				log.Println("Failed to get absolute path ", path, " error ", err)
+			}
 			time.Sleep(time.Millisecond * 500)
-			ps := string(os.PathSeparator)
-			p := strings.Split(path, ps)
-			p = p[len(srcDir)-1:]
-			if tplDir == p[0] || dtDir == p[0] {
-				build("/")
+			rp := strings.Replace(pp, sg.sitePath, "", 1)
+			if strings.HasPrefix(rp, "/"+sourceDir) {
+				sg.build(pp)
+				log.Println("Rebuilt: ", rp)
 			} else {
-				build(strings.Join(p[1:], ps))
-				log.Println("Rebuilt: ", path)
+				sg.buildAll()
 			}
 			mu.Lock()
 			delete(events, path)
@@ -162,19 +130,20 @@ func main() {
 			}
 		}()
 
-		err = watcher.Add(sourceDir)
+		srcDir := filepath.Join(sg.sitePath, sourceDir)
+		err = watcher.Add(srcDir)
 		if err != nil {
 			log.Fatal("Source DIR error: ", err)
 		}
-		err = watcher.Add(templateDir)
+		err = watcher.Add(filepath.Join(sg.sitePath, tplDir))
 		if err != nil {
 			log.Println("Template DIR error: ", err)
 		}
-		err = watcher.Add(dataDir)
+		err = watcher.Add(filepath.Join(sg.sitePath, dataDir))
 		if err != nil {
 			log.Println("Data DIR error: ", err)
 		}
-		for _, folder := range folders(sourceDir) {
+		for _, folder := range folders(srcDir) {
 			if err := watcher.Add(folder); err != nil {
 				log.Println("Failed to watch dir: ", folder)
 			}
