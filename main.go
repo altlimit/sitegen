@@ -26,9 +26,11 @@ import (
 var (
 	cmdWG   sync.WaitGroup
 	serving bool
+	version = "v0.0.4"
 )
 
 func main() {
+	log.Println("sitegen ", version)
 	var (
 		sitePath  string
 		publicDir string
