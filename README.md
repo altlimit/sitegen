@@ -27,50 +27,9 @@ sitegen -help
 
 ## File Handlers
 
-File handlers is a way to process any file differently when it changes by running a specific command. Example for using tailwind with postcss & purgecss. If you are just using cdn in your templates you don't need this. You can skip to styles.css if you just want to see how to run a command in a per file basis.
+File handlers is a way to process any file differently when it changes by running a specific command. 
 
-```shell
-# Insta postcss tailwind and autoprefixer
-npm init -y
-npm install tailwindcss autoprefixer postcss-cli
-npx tailwind init
-```
-
-In your postcss.config.js
-
-```js
-const purgecss = require("@fullhuman/postcss-purgecss");
-const cssnano = require("cssnano");
-module.exports = {
-  plugins: [
-    require("tailwindcss"),
-    process.env.NODE_ENV === "production" ? require("autoprefixer") : null,
-    process.env.NODE_ENV === "production"
-      ? cssnano({ preset: "default" })
-      : null,
-    process.env.NODE_ENV === "production"
-      ? purgecss({
-          content: ["./src/**/*.html", "./templates/**/*.html"],
-          defaultExtractor: content => content.match(/[\w-/:]+(?<!:)/g) || []
-        })
-      : null
-  ]
-};
-```
-
-Add these scripts in your package.json
-
-```json
-"scripts": {
-    "build:css": "node_modules/postcss-cli/bin/postcss src/css/styles.css -o public/css/styles.css",
-    "build:prod:css": "node_modules/postcss-cli/bin/postcss --env=production src/css/styles.css -o public/css/styles.css"
-}
-```
-
-In your styles.css add below.
-serve: for running while in development
-build: for final build, useful for minification and purgecss
-
+If you want to run npm run build:css when it's development and npm run build:prod:css for final build add this to the css file:
 ```css
 /*
 ---
@@ -78,7 +37,19 @@ serve: npm run build:css
 build: npm run build:prod:css
 ---
 */
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 ```
+
+## Template functions
+
+Uses go html template.
+
+* path - prefixes any path with base path
+* getSources "(Path|Local|Filename|Meta.*)" "Pattern" - returns source array that matches pattern
+* data "file.json" - loads any data under data dir
+* json - converts data to json for javascript/json use
+* allowJS - no escape js
+* allowHTML - no escape html
+* allowCSS - no escape 
+* sort "(Path|Local|Filename|Meta.*)" "(asc|desc) - orders sources
+* limit n - limits sources
+* offset n - offsets sources
