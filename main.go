@@ -26,7 +26,7 @@ import (
 var (
 	cmdWG   sync.WaitGroup
 	serving bool
-	version = "v0.0.4"
+	version = "v0.0.5"
 )
 
 func main() {
