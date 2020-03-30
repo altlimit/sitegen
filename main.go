@@ -25,7 +25,7 @@ import (
 
 var (
 	cmdWG   sync.WaitGroup
-	version = "v0.0.5"
+	version = "v0.0.6"
 )
 
 func main() {
@@ -80,13 +80,13 @@ func main() {
 	// should be url path
 	basePath = strings.ReplaceAll(basePath, "\\", "/")
 	if basePath != "/" {
-		basePath = "/" + strings.Trim(basePath, "/")
+		basePath = "/" + strings.Trim(basePath, "/") + "/"
 	}
 	sg = newSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath, min, clean, serve)
 	sg.buildAll()
 
 	if sg.dev {
-		ss = newStaticServer(pubPath)
+		ss = newStaticServer(pubPath, basePath)
 		watcher, err := fsnotify.NewWatcher()
 		var mu sync.Mutex
 		events := make(map[string]bool)
@@ -102,7 +102,7 @@ func main() {
 			}
 			time.Sleep(time.Millisecond * 500)
 			rp := strings.Replace(pp, sg.sitePath, "", 1)
-			if strings.HasPrefix(rp, "/"+sourceDir) {
+			if strings.HasPrefix(rp, string(os.PathSeparator)+sourceDir) {
 				if s, ok := sg.sources[pp]; ok {
 					s.reloadContent()
 				}

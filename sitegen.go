@@ -50,6 +50,7 @@ type (
 		ext     string
 		ctype   string
 		content []byte
+		sg      *SiteGen
 	}
 )
 
@@ -84,14 +85,11 @@ func newSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath string, 
 				log.Println(path, " error ", err)
 				return nil
 			}
-			s, err := sg.newSource(path)
+			_, err = sg.newSource(path)
 			if err != nil {
 				log.Println(path, " failed source ", err)
 				return nil
 			}
-			// load it initially for meta data
-			s.loadContent()
-			sg.sources[path] = s
 			return nil
 		})
 
@@ -108,10 +106,12 @@ func (sg *SiteGen) newSource(path string) (*Source, error) {
 		return nil, err
 	}
 	s.Local = p
-	s.Path = sg.localToPath(s)
 	if ctype := mime.TypeByExtension(s.ext); ctype != "" {
 		s.ctype = strings.Split(ctype, ";")[0]
 	}
+	s.sg = sg
+	s.loadContent()
+	sg.sources[path] = s
 	return s, nil
 }
 
@@ -169,7 +169,7 @@ func (sg *SiteGen) html(s *Source) []byte {
 
 	data["Dev"] = sg.dev
 	data["Source"] = s
-	data["BasePath"] = strings.TrimSuffix(sg.basePath, "/") + "/"
+	data["BasePath"] = sg.basePath
 
 	tplBuf := new(bytes.Buffer)
 	if err := tpl.Execute(tplBuf, data); err != nil {
@@ -267,10 +267,7 @@ func (sg *SiteGen) buildAll() {
 }
 
 func (sg *SiteGen) path(path string) string {
-	if path[0] != '/' {
-		path = "/" + path
-	}
-	return strings.TrimSuffix(sg.basePath, "/") + path
+	return sg.basePath + strings.TrimLeft(path, "/")
 }
 
 func (sg *SiteGen) data(name string) interface{} {
@@ -304,10 +301,7 @@ func (sg *SiteGen) localToPath(s *Source) string {
 		}
 		path = strings.ReplaceAll(path, "\\", "/")
 	}
-	if path[0] != '/' {
-		path = "/" + path
-	}
-	return strings.TrimSuffix(sg.basePath, "/") + path
+	return sg.basePath + strings.TrimLeft(path, "/")
 }
 
 func (sg *SiteGen) getSources(prop string, pattern string) []*Source {
@@ -349,6 +343,7 @@ func (s *Source) loadContent() []byte {
 		} else {
 			content = c
 		}
+		s.Meta = make(map[string]interface{})
 		if txtCtype && meta != nil {
 			if err := yaml.Unmarshal(meta, &s.Meta); err != nil {
 				log.Println(s.Local, "meta error", err)
@@ -358,11 +353,10 @@ func (s *Source) loadContent() []byte {
 					s.Path = fmt.Sprint(p)
 				}
 			}
-		} else {
-			s.Meta = make(map[string]interface{})
 		}
 		s.content = content
 	}
+	s.Path = s.sg.localToPath(s)
 	return s.content
 }
 

@@ -2,7 +2,6 @@
 
 echo "Building..."
 rm -rf ./build
-rm -rf ./site/public
 GOOS=windows GOARCH=amd64 go build -o build/win/sitegen.exe
 GOOS=linux GOARCH=amd64 go build -o build/linux/sitegen
 GOOS=darwin GOARCH=amd64 go build -o build/osx/sitegen

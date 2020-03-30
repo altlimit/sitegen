@@ -13,6 +13,10 @@ Bundled with the executables is a sample website that you can start with. Extrac
 sitegen -serve
 # Run final build
 sitegen
+# Build for github pages, just add -serve to test & add  -minify to minify output
+sitegen -public ./docs
+# Build in dist but serve under a subdirectory blog
+sitegen -public ./dist  -base /blog
 # For more options
 sitegen -help
 ```

@@ -32,6 +32,7 @@ initHotReload();
 
 type staticServer struct {
 	publicDir      string
+	baseDir        string
 	notifier       chan []byte
 	newClients     chan chan []byte
 	closingClients chan chan []byte
@@ -77,18 +78,22 @@ func (ss *staticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		fs := http.Dir(ss.publicDir)
 		name := r.URL.Path
-		f, err := fs.Open(r.URL.Path)
+		f, err := fs.Open(name)
 		if err != nil {
-			if strings.Contains(err.Error(), "no such file") {
+			// ignore favicon.ico
+			if strings.HasSuffix(name, "favicon.ico") {
+				return
+			}
+			if errM := err.Error(); strings.Contains(errM, "no such file") || strings.Contains(errM, "cannot find the file specified") {
 				var err2 error
-				f, err2 = fs.Open("/404.html")
+				f, err2 = fs.Open(ss.baseDir + "404.html")
 				if err2 == nil {
 					err = nil
-					log.Println(r.URL.Path, " not found in ", ss.publicDir)
+					log.Println(name, " not found in ", ss.publicDir)
 				}
 			}
 			if err != nil {
-				log.Println(r.URL.Path, " error ", err)
+				log.Println(name, " error ", err)
 				return
 			}
 		}
@@ -160,9 +165,10 @@ func (ss *staticServer) listen() {
 
 }
 
-func newStaticServer(dir string) *staticServer {
+func newStaticServer(dir, base string) *staticServer {
 	ss := &staticServer{
 		publicDir:      dir,
+		baseDir:        base,
 		notifier:       make(chan []byte, 1),
 		newClients:     make(chan chan []byte),
 		closingClients: make(chan chan []byte),
