@@ -84,6 +84,7 @@ func (ss *staticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				f, err2 = fs.Open("/404.html")
 				if err2 == nil {
 					err = nil
+					log.Println(r.URL.Path, " not found in ", ss.publicDir)
 				}
 			}
 			if err != nil {

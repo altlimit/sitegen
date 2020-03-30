@@ -25,31 +25,33 @@ import (
 
 var (
 	cmdWG   sync.WaitGroup
-	serving bool
 	version = "v0.0.5"
 )
 
 func main() {
 	log.Println("sitegen ", version)
 	var (
-		sitePath  string
-		publicDir string
-		sourceDir string
-		dataDir   string
-		tplDir    string
-		port      string
-		clean     bool
-		isMinify  bool
-		min       *minify.M
-		ss        *staticServer
-		sg        *SiteGen
+		sitePath   string
+		publicPath string
+		sourceDir  string
+		dataDir    string
+		tplDir     string
+		port       string
+		basePath   string
+		serve      bool
+		clean      bool
+		isMinify   bool
+		min        *minify.M
+		ss         *staticServer
+		sg         *SiteGen
 	)
 	flag.StringVar(&sitePath, "site", "./site", "Absolute or relative root site path")
-	flag.StringVar(&publicDir, "public", "public", "Public folder relative to site path")
 	flag.StringVar(&sourceDir, "source", "src", "Source folder relative to site path")
 	flag.StringVar(&dataDir, "data", "data", "Data folder relative to site path")
 	flag.StringVar(&tplDir, "templates", "templates", "Template folder relative to site path")
-	flag.BoolVar(&serving, "serve", os.Getenv("SERVE") == "1", "Watch for changes & serve")
+	flag.StringVar(&publicPath, "public", "./public", "Absolute or relative public path")
+	flag.StringVar(&basePath, "base", "/", "Base folder relative to public path")
+	flag.BoolVar(&serve, "serve", os.Getenv("SERVE") == "1", "Start a development server and watcher")
 	flag.BoolVar(&clean, "clean", os.Getenv("CLEAN") == "1", "Clean public dir before build")
 	flag.BoolVar(&isMinify, "minify", os.Getenv("MINIFY") == "1", "Minify (HTML|JS|CSS)")
 	flag.StringVar(&port, "port", "8888", "Port for localhost")
@@ -68,16 +70,28 @@ func main() {
 		min.AddFuncRegexp(regexp.MustCompile("[/+]xml$"), xml.Minify)
 	}
 
-	sg = newSiteGen(sitePath, tplDir, dataDir, publicDir, sourceDir, min, clean, serving)
+	pubPath, err := filepath.Abs(publicPath)
+	if err != nil {
+		log.Fatalln("Error public path ", err)
+	}
+	if basePath == "" {
+		basePath = "/"
+	}
+	// should be url path
+	basePath = strings.ReplaceAll(basePath, "\\", "/")
+	if basePath != "/" {
+		basePath = "/" + strings.Trim(basePath, "/")
+	}
+	sg = newSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath, min, clean, serve)
 	sg.buildAll()
 
-	if serving {
-		ss = newStaticServer(filepath.Join(sg.sitePath, publicDir))
+	if sg.dev {
+		ss = newStaticServer(pubPath)
 		watcher, err := fsnotify.NewWatcher()
 		var mu sync.Mutex
 		events := make(map[string]bool)
 		if err != nil {
-			log.Fatal("Watcher error", err)
+			log.Fatalln("Watcher error", err)
 		}
 		defer watcher.Close()
 
@@ -138,7 +152,7 @@ func main() {
 		srcDir := filepath.Join(sg.sitePath, sourceDir)
 		err = watcher.Add(srcDir)
 		if err != nil {
-			log.Fatal("Source DIR error: ", err)
+			log.Fatalln("Source DIR error: ", err)
 		}
 		err = watcher.Add(filepath.Join(sg.sitePath, tplDir))
 		if err != nil {
@@ -154,7 +168,7 @@ func main() {
 			}
 		}
 
-		log.Println("Serving: ", publicDir, " at ", fmt.Sprintf("http://localhost:%s", port))
+		log.Println("Serving: ", publicPath, " at ", fmt.Sprintf("http://localhost:%s%s", port, basePath))
 		log.Println("Press Ctrl+C to stop")
 		http.Handle("/", ss)
 		log.Println(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
@@ -167,7 +181,7 @@ func folders(dir string) []string {
 	var dirs []string
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 
 	for _, f := range files {

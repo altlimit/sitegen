@@ -32,7 +32,8 @@ type (
 		sitePath    string
 		templateDir string
 		dataDir     string
-		publicDir   string
+		publicPath  string
+		basePath    string
 		sourceDir   string
 		minify      *minify.M
 		clean       bool
@@ -52,17 +53,18 @@ type (
 	}
 )
 
-func newSiteGen(sitePath, tplDir, dataDir, pubDir, sourceDir string, min *minify.M, clean bool, dev bool) *SiteGen {
+func newSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath string, min *minify.M, clean bool, dev bool) *SiteGen {
 	sp, err := filepath.Abs(sitePath)
 	if err != nil {
-		log.Fatal("Site Path ", sitePath, " error ", err)
+		log.Fatalln("Site Path ", sitePath, " error ", err)
 	}
 	sg := &SiteGen{
 		sitePath:    sp,
 		sourceDir:   sourceDir,
 		templateDir: tplDir,
 		dataDir:     dataDir,
-		publicDir:   pubDir,
+		publicPath:  pubPath,
+		basePath:    basePath,
 		minify:      min,
 		clean:       clean,
 		sources:     make(map[string]*Source),
@@ -136,6 +138,7 @@ func (sg *SiteGen) html(s *Source) []byte {
 		"sort":       sortBy,
 		"limit":      limit,
 		"offset":     offset,
+		"path":       sg.path,
 		"getSources": sg.getSources,
 		"data":       sg.data,
 		"json":       parseJSON,
@@ -166,6 +169,7 @@ func (sg *SiteGen) html(s *Source) []byte {
 
 	data["Dev"] = sg.dev
 	data["Source"] = s
+	data["BasePath"] = strings.TrimSuffix(sg.basePath, "/") + "/"
 
 	tplBuf := new(bytes.Buffer)
 	if err := tpl.Execute(tplBuf, data); err != nil {
@@ -192,7 +196,7 @@ func (sg *SiteGen) build(path string) error {
 
 	switch s.ext {
 	case ".html", ".htm":
-		sDir := filepath.Join(sg.sitePath, sg.publicDir, s.Path)
+		sDir := filepath.Join(sg.publicPath, s.Path)
 		fName := "index.html"
 		if strings.HasSuffix(s.Path, ".html") || strings.HasSuffix(s.Path, ".htm") {
 			sDir, fName = filepath.Split(sDir)
@@ -232,10 +236,10 @@ func (sg *SiteGen) build(path string) error {
 				}
 			}
 		}
-		if err := os.MkdirAll(filepath.Join(sg.sitePath, sg.publicDir, filepath.Dir(s.Path)), os.ModePerm); err != nil {
+		if err := os.MkdirAll(filepath.Join(sg.publicPath, filepath.Dir(s.Path)), os.ModePerm); err != nil {
 			return err
 		}
-		if err := ioutil.WriteFile(filepath.Join(sg.sitePath, sg.publicDir, s.Path), src, os.ModePerm); err != nil {
+		if err := ioutil.WriteFile(filepath.Join(sg.publicPath, s.Path), src, os.ModePerm); err != nil {
 			return err
 		}
 	}
@@ -246,8 +250,8 @@ func (sg *SiteGen) build(path string) error {
 func (sg *SiteGen) buildAll() {
 	out := make(map[string]int)
 	if sg.clean {
-		if err := os.RemoveAll(filepath.Join(sg.sitePath, sg.publicDir)); err != nil {
-			log.Fatalln("Failed to clean ", sg.publicDir, " error ", err)
+		if err := os.RemoveAll(sg.publicPath); err != nil {
+			log.Fatalln("Failed to clean ", sg.publicPath, " error ", err)
 		}
 	}
 	for k, s := range sg.sources {
@@ -260,6 +264,13 @@ func (sg *SiteGen) buildAll() {
 	for k, v := range out {
 		log.Println(k, ":", v)
 	}
+}
+
+func (sg *SiteGen) path(path string) string {
+	if path[0] != '/' {
+		path = "/" + path
+	}
+	return strings.TrimSuffix(sg.basePath, "/") + path
 }
 
 func (sg *SiteGen) data(name string) interface{} {
@@ -293,8 +304,10 @@ func (sg *SiteGen) localToPath(s *Source) string {
 		}
 		path = strings.ReplaceAll(path, "\\", "/")
 	}
-
-	return "/" + strings.TrimPrefix(path, "/")
+	if path[0] != '/' {
+		path = "/" + path
+	}
+	return strings.TrimSuffix(sg.basePath, "/") + path
 }
 
 func (sg *SiteGen) getSources(prop string, pattern string) []*Source {
