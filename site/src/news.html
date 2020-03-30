@@ -9,7 +9,7 @@ title: News
 </h1>
 
 <div class="my-8">
-    {{range .Sources | filter "Path" "/news/*" | sort "Meta.date" "desc"}}
+    {{range getSources "Path" "/news/*" | sort "Meta.date" "desc"}}
     <div class="border shadow m-2 p-4">
         <a href="{{.Path}}">
             {{index .Meta "title"}}

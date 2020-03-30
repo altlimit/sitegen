@@ -133,15 +133,15 @@ func (sg *SiteGen) html(s *Source) []byte {
 
 	tpl := template.New(tplName)
 	tpl = tpl.Funcs(map[string]interface{}{
-		"sort":      sortBy,
-		"limit":     limit,
-		"offset":    offset,
-		"filter":    filter,
-		"data":      sg.data,
-		"json":      parseJSON,
-		"allowJS":   allowJS,
-		"allowHTML": allowHTML,
-		"allowCSS":  allowCSS,
+		"sort":       sortBy,
+		"limit":      limit,
+		"offset":     offset,
+		"getSources": sg.getSources,
+		"data":       sg.data,
+		"json":       parseJSON,
+		"allowJS":    allowJS,
+		"allowHTML":  allowHTML,
+		"allowCSS":   allowCSS,
 	})
 
 	tplFiles, err := filepath.Glob(filepath.Join(sg.sitePath, sg.templateDir, "*.html"))
@@ -166,7 +166,6 @@ func (sg *SiteGen) html(s *Source) []byte {
 
 	data["Dev"] = sg.dev
 	data["Source"] = s
-	data["Sources"] = sg.sourceList()
 
 	tplBuf := new(bytes.Buffer)
 	if err := tpl.Execute(tplBuf, data); err != nil {
@@ -298,6 +297,23 @@ func (sg *SiteGen) localToPath(s *Source) string {
 	return "/" + strings.TrimPrefix(path, "/")
 }
 
+func (sg *SiteGen) getSources(prop string, pattern string) []*Source {
+	filtered := []*Source{}
+	for _, s := range sg.sources {
+		val := s.value(prop)
+		match, err := filepath.Match(pattern, val)
+		if err != nil {
+			log.Println("Filter did not match", pattern, " = ", val)
+			continue
+		}
+		if match {
+			filtered = append(filtered, s)
+		}
+	}
+
+	return filtered
+}
+
 func (s *Source) reloadContent() []byte {
 	s.content = nil
 	return s.loadContent()
@@ -352,56 +368,6 @@ func (s *Source) value(prop string) string {
 		}
 	}
 	return val
-}
-
-func isIndex(fileInfo os.FileInfo) bool {
-	return strings.HasPrefix(fileInfo.Name(), "index.")
-}
-
-func sortBy(prop string, order string, sources []*Source) []*Source {
-	sorted := make([]*Source, len(sources))
-	copy(sorted, sources)
-	if order == "desc" {
-		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].value(prop) > sorted[j].value(prop)
-		})
-	} else {
-		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].value(prop) < sorted[j].value(prop)
-		})
-	}
-	return sorted
-}
-
-func limit(limit int, sources []*Source) []*Source {
-	if limit >= len(sources) {
-		return sources
-	}
-	return sources[:limit]
-}
-
-func offset(offset int, sources []*Source) []*Source {
-	if offset >= len(sources) {
-		return []*Source{}
-	}
-	return sources[offset:]
-}
-
-func filter(prop string, pattern string, sources []*Source) []*Source {
-	filtered := []*Source{}
-	for _, s := range sources {
-		val := s.value(prop)
-		match, err := filepath.Match(pattern, val)
-		if err != nil {
-			log.Println("Filter did not match", pattern, " = ", val)
-			continue
-		}
-		if match {
-			filtered = append(filtered, s)
-		}
-	}
-
-	return filtered
 }
 
 func parseContent(content []byte, sep string) ([]byte, []byte) {
@@ -459,4 +425,33 @@ func allowHTML(s string) template.HTML {
 
 func allowCSS(s string) template.CSS {
 	return template.CSS(s)
+}
+
+func sortBy(prop string, order string, sources []*Source) []*Source {
+	sorted := make([]*Source, len(sources))
+	copy(sorted, sources)
+	if order == "desc" {
+		sort.Slice(sorted, func(i, j int) bool {
+			return sorted[i].value(prop) > sorted[j].value(prop)
+		})
+	} else {
+		sort.Slice(sorted, func(i, j int) bool {
+			return sorted[i].value(prop) < sorted[j].value(prop)
+		})
+	}
+	return sorted
+}
+
+func limit(limit int, sources []*Source) []*Source {
+	if limit >= len(sources) {
+		return sources
+	}
+	return sources[:limit]
+}
+
+func offset(offset int, sources []*Source) []*Source {
+	if offset >= len(sources) {
+		return []*Source{}
+	}
+	return sources[offset:]
 }

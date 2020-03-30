@@ -10,8 +10,8 @@ func testSiteGen() *SiteGen {
 	return newSiteGen("./site", "templates", "data", "public", "src", nil, true, true)
 }
 
-func TestFilter(t *testing.T) {
-	sources := testSiteGen().sourceList()
+func TestGetSources(t *testing.T) {
+	sg := testSiteGen()
 	var tests = []struct {
 		pattern string
 		key     string
@@ -28,7 +28,7 @@ func TestFilter(t *testing.T) {
 	for _, tt := range tests {
 		testname := fmt.Sprintf("%s,%s", tt.pattern, tt.key)
 		t.Run(testname, func(t *testing.T) {
-			ans := len(filter(tt.key, tt.pattern, sources))
+			ans := len(sg.getSources(tt.key, tt.pattern))
 			if ans != tt.want {
 				t.Errorf("got %d, want %d", ans, tt.want)
 			}
@@ -84,7 +84,8 @@ func TestLimit(t *testing.T) {
 }
 
 func TestSort(t *testing.T) {
-	sources := filter("Path", "/news/*", testSiteGen().sourceList())
+	sg := testSiteGen()
+	sources := sg.getSources("Path", "/news/*")
 	var tests = []struct {
 		by    string
 		order string

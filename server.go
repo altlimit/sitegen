@@ -14,7 +14,7 @@ import (
 var (
 	hotReloadScript = `<script>
 function initHotReload() {
-	const es = new EventSource("/__hotreload");	
+	const es = new EventSource("/__hotreload");
 	es.onmessage = function(event) {
 		if (event.data === "updated") {
 			location.reload();
@@ -79,14 +79,23 @@ func (ss *staticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		name := r.URL.Path
 		f, err := fs.Open(r.URL.Path)
 		if err != nil {
-			log.Println(r.URL.Path, "error", err)
-			return
+			if strings.Contains(err.Error(), "no such file") {
+				var err2 error
+				f, err2 = fs.Open("/404.html")
+				if err2 == nil {
+					err = nil
+				}
+			}
+			if err != nil {
+				log.Println(r.URL.Path, " error ", err)
+				return
+			}
 		}
 		defer f.Close()
 
 		d, err := f.Stat()
 		if err != nil {
-			log.Println(r.URL.Path, "error", err)
+			log.Println(r.URL.Path, " stat error ", err)
 			return
 		}
 
