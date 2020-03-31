@@ -27,9 +27,10 @@ sitegen -help
 
 ## File Handlers
 
-File handlers is a way to process any file differently when it changes by running a specific command. 
+File handlers is a way to process any file differently when it changes by running a specific command.
 
 If you want to run npm run build:css when it's development and npm run build:prod:css for final build add this to the css file:
+
 ```css
 /*
 ---
@@ -43,13 +44,13 @@ build: npm run build:prod:css
 
 Uses go html template.
 
-* path - prefixes any path with base path
-* getSources "(Path|Local|Filename|Meta.*)" "Pattern" - returns source array that matches pattern
-* data "file.json" - loads any data under data dir
-* json - converts data to json for javascript/json use
-* allowJS - no escape js
-* allowHTML - no escape html
-* allowCSS - no escape 
-* sort "(Path|Local|Filename|Meta.*)" "(asc|desc) - orders sources
-* limit n - limits sources
-* offset n - offsets sources
+- path - prefixes any path with base path
+- sources "(Path|Local|Filename|Meta.\*)" "Pattern" - returns source array that matches pattern
+- data "file.json" - loads any data under data dir
+- json - converts data to json for javascript/json use
+- allowJS - no escape js
+- allowHTML - no escape html
+- allowCSS - no escape
+- sort "(Path|Local|Filename|Meta.\*)" "(asc|desc) - orders sources
+- limit n - limits sources
+- offset n - offsets sources

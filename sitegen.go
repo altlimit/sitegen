@@ -135,16 +135,16 @@ func (sg *SiteGen) html(s *Source) []byte {
 
 	tpl := template.New(tplName)
 	tpl = tpl.Funcs(map[string]interface{}{
-		"sort":       sortBy,
-		"limit":      limit,
-		"offset":     offset,
-		"path":       sg.path,
-		"getSources": sg.getSources,
-		"data":       sg.data,
-		"json":       parseJSON,
-		"allowJS":    allowJS,
-		"allowHTML":  allowHTML,
-		"allowCSS":   allowCSS,
+		"sort":      sortBy,
+		"limit":     limit,
+		"offset":    offset,
+		"path":      sg.path,
+		"sources":   sg.getSources,
+		"data":      sg.data,
+		"json":      parseJSON,
+		"allowJS":   allowJS,
+		"allowHTML": allowHTML,
+		"allowCSS":  allowCSS,
 	})
 
 	tplFiles, err := filepath.Glob(filepath.Join(sg.sitePath, sg.templateDir, "*.html"))
