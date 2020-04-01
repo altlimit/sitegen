@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -38,6 +37,7 @@ func main() {
 		tplDir     string
 		port       string
 		basePath   string
+		exclude    string
 		serve      bool
 		clean      bool
 		isMinify   bool
@@ -52,6 +52,7 @@ func main() {
 	flag.StringVar(&publicPath, "public", "./public", "Absolute or relative public path")
 	flag.StringVar(&basePath, "base", "/", "Base folder relative to public path")
 	flag.BoolVar(&serve, "serve", os.Getenv("SERVE") == "1", "Start a development server and watcher")
+	flag.StringVar(&exclude, "exclude", "^(node_modules|bower_components)", "Exclude from watcher")
 	flag.BoolVar(&clean, "clean", os.Getenv("CLEAN") == "1", "Clean public dir before build")
 	flag.BoolVar(&isMinify, "minify", os.Getenv("MINIFY") == "1", "Minify (HTML|JS|CSS)")
 	flag.StringVar(&port, "port", "8888", "Port for localhost")
@@ -95,24 +96,65 @@ func main() {
 		}
 		defer watcher.Close()
 
-		buildPath := func(path string) {
+		processKey := func(key string) {
+			action := key[:3]
+			path := key[4:]
 			pp, err := filepath.Abs(path)
 			if err != nil {
 				log.Println("Failed to get absolute path ", path, " error ", err)
 			}
 			time.Sleep(time.Millisecond * 500)
-			rp := strings.Replace(pp, sg.sitePath, "", 1)
-			if strings.HasPrefix(rp, string(os.PathSeparator)+sourceDir) {
-				if s, ok := sg.sources[pp]; ok {
-					s.reloadContent()
+			fi, err := os.Stat(pp)
+			if err != nil {
+				log.Println("Stat error ", err)
+			}
+			if err == nil && fi.IsDir() {
+				if action == "add" {
+					if !excluded(exclude, strings.Replace(pp, sg.sitePath+string(os.PathSeparator), "", 1)) {
+						if err := watcher.Add(pp); err != nil {
+							log.Println("Watch dir ", pp, " error ", err)
+						}
+					}
+				} else {
+					if err := watcher.Remove(pp); err != nil {
+						log.Println("Watch stop dir ", pp, " error ", err)
+					}
 				}
-				sg.build(pp)
-				log.Println("Rebuilt: ", rp)
 			} else {
-				sg.buildAll()
+				rp := strings.Replace(pp, sg.sitePath, "", 1)
+				isSrc := strings.HasPrefix(rp, string(os.PathSeparator)+sourceDir)
+				switch action {
+				case "add":
+					if isSrc {
+						if s, ok := sg.sources[pp]; ok {
+							s.reloadContent()
+						} else {
+							if _, err := sg.newSource(pp); err != nil {
+								log.Println(path, " failed source ", err)
+							}
+						}
+						if err := sg.build(pp); err != nil {
+							log.Println("Build failed ", pp, " error ", err)
+						} else {
+							log.Println("Rebuilt: ", rp)
+						}
+					} else {
+						sg.buildAll()
+					}
+				case "del":
+					if isSrc {
+						if err := sg.remove(pp); err != nil {
+							log.Println("Remove failed ", pp, " error ", err)
+						} else {
+							log.Println("Deleted: ", rp)
+						}
+					} else {
+						sg.buildAll()
+					}
+				}
 			}
 			mu.Lock()
-			delete(events, path)
+			delete(events, key)
 			mu.Unlock()
 			cmdWG.Wait()
 			ss.notifier <- []byte("updated")
@@ -125,19 +167,26 @@ func main() {
 					if !ok {
 						return
 					}
-					if event.Op&fsnotify.Write == fsnotify.Write {
+					var op string
+					if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
+						op = "del"
+					} else if event.Op&fsnotify.Create == fsnotify.Create || event.Op&fsnotify.Write == fsnotify.Write {
+						op = "add"
+					}
+					if op != "" {
 						if n := strings.Split(event.Name, string(os.PathSeparator)); strings.HasPrefix(n[len(n)-1], ".") {
 							return
 						}
 						b := false
 						mu.Lock()
-						if _, ok := events[event.Name]; !ok {
-							events[event.Name] = true
+						key := op + ":" + event.Name
+						if _, ok := events[key]; !ok {
+							events[key] = true
 							b = true
 						}
 						mu.Unlock()
 						if b {
-							go buildPath(event.Name)
+							go processKey(key)
 						}
 					}
 				case err, ok := <-watcher.Errors:
@@ -149,24 +198,23 @@ func main() {
 			}
 		}()
 
-		srcDir := filepath.Join(sg.sitePath, sourceDir)
-		err = watcher.Add(srcDir)
-		if err != nil {
-			log.Fatalln("Source DIR error: ", err)
+		if err = watcher.Add(sg.sitePath); err != nil {
+			log.Fatalln("Watch dir ", tplDir, " error ", err)
 		}
-		err = watcher.Add(filepath.Join(sg.sitePath, tplDir))
-		if err != nil {
-			log.Println("Template DIR error: ", err)
-		}
-		err = watcher.Add(filepath.Join(sg.sitePath, dataDir))
-		if err != nil {
-			log.Println("Data DIR error: ", err)
-		}
-		for _, folder := range folders(srcDir) {
-			if err := watcher.Add(folder); err != nil {
-				log.Println("Failed to watch dir: ", folder)
-			}
-		}
+
+		filepath.Walk(sg.sitePath,
+			func(path string, info os.FileInfo, err error) error {
+				if info.IsDir() && !strings.HasPrefix(path, sg.publicPath) {
+					if !excluded(exclude, strings.Replace(path, sg.sitePath+string(os.PathSeparator), "", 1)) {
+						err = watcher.Add(path)
+						if err != nil {
+							log.Fatalln("Watch dir ", path, " error ", err)
+						}
+						return nil
+					}
+				}
+				return nil
+			})
 
 		log.Println("Serving: ", publicPath, " at ", fmt.Sprintf("http://localhost:%s%s", port, basePath))
 		log.Println("Press Ctrl+C to stop")
@@ -177,19 +225,14 @@ func main() {
 	cmdWG.Wait()
 }
 
-func folders(dir string) []string {
-	var dirs []string
-	files, err := ioutil.ReadDir(dir)
+func excluded(pattern, path string) bool {
+	if strings.HasPrefix(path, ".") {
+		return true
+	}
+	m, err := regexp.Match(pattern, []byte(path))
 	if err != nil {
-		log.Fatalln(err)
+		log.Println("Watch exclude pattern", pattern, " error ", err)
+		return true
 	}
-
-	for _, f := range files {
-		if f.IsDir() {
-			path := filepath.Join(dir, f.Name())
-			dirs = append(dirs, path)
-			dirs = append(dirs, folders(path)...)
-		}
-	}
-	return dirs
+	return m
 }

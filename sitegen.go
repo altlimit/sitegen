@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"io/ioutil"
 	"log"
 	"mime"
@@ -20,9 +21,9 @@ import (
 
 var (
 	parseCtype = map[string]string{
-		"text/css":       ".css",
-		"application/js": ".js",
-		"text/html":      ".html",
+		"text/css":               ".css",
+		"application/javascript": ".js",
+		"text/html":              ".html",
 	}
 )
 
@@ -188,12 +189,7 @@ func (sg *SiteGen) html(s *Source) []byte {
 	return body
 }
 
-func (sg *SiteGen) build(path string) error {
-	s, ok := sg.sources[path]
-	if !ok {
-		return fmt.Errorf("Build failed for %s: not found", path)
-	}
-
+func (sg *SiteGen) sourcePath(s *Source) string {
 	switch s.ext {
 	case ".html", ".htm":
 		sDir := filepath.Join(sg.publicPath, s.Path)
@@ -201,11 +197,48 @@ func (sg *SiteGen) build(path string) error {
 		if strings.HasSuffix(s.Path, ".html") || strings.HasSuffix(s.Path, ".htm") {
 			sDir, fName = filepath.Split(sDir)
 		}
-		if err := os.MkdirAll(sDir, os.ModePerm); err != nil {
+		return filepath.Join(sDir, fName)
+	default:
+		return filepath.Join(sg.publicPath, s.Path)
+	}
+}
+
+func (sg *SiteGen) remove(path string) error {
+	s, ok := sg.sources[path]
+	if !ok {
+		return nil
+	}
+
+	pubPath := sg.sourcePath(s)
+	if err := os.Remove(pubPath); err != nil {
+		return fmt.Errorf("Remove failed for %s: error %v", pubPath, err)
+	}
+	pubPath = filepath.Dir(pubPath)
+	empty, err := isDirEmpty(pubPath)
+	if err != nil {
+		return fmt.Errorf("Remove dir check for %s: error %v", pubPath, err)
+	}
+	if empty {
+		if err := os.Remove(pubPath); err != nil {
+			return fmt.Errorf("Remove dir failed for %s: error %v", pubPath, err)
+		}
+	}
+
+	return nil
+}
+
+func (sg *SiteGen) build(path string) error {
+	s, ok := sg.sources[path]
+	if !ok {
+		return fmt.Errorf("Build failed for %s: not found", path)
+	}
+
+	pubPath := sg.sourcePath(s)
+	switch s.ext {
+	case ".html", ".htm":
+		if err := os.MkdirAll(filepath.Dir(pubPath), os.ModePerm); err != nil {
 			return err
 		}
-
-		pubPath := filepath.Join(sDir, fName)
 		pubFile, err := os.Create(pubPath)
 		if err != nil {
 			return err
@@ -236,10 +269,10 @@ func (sg *SiteGen) build(path string) error {
 				}
 			}
 		}
-		if err := os.MkdirAll(filepath.Join(sg.publicPath, filepath.Dir(s.Path)), os.ModePerm); err != nil {
+		if err := os.MkdirAll(filepath.Dir(pubPath), os.ModePerm); err != nil {
 			return err
 		}
-		if err := ioutil.WriteFile(filepath.Join(sg.publicPath, s.Path), src, os.ModePerm); err != nil {
+		if err := ioutil.WriteFile(pubPath, src, os.ModePerm); err != nil {
 			return err
 		}
 	}
@@ -461,4 +494,18 @@ func offset(offset int, sources []*Source) []*Source {
 		return []*Source{}
 	}
 	return sources[offset:]
+}
+
+func isDirEmpty(name string) (bool, error) {
+	f, err := os.Open(name)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+
+	_, err = f.Readdirnames(1)
+	if err == io.EOF {
+		return true, nil
+	}
+	return false, err
 }

@@ -14,17 +14,19 @@ import (
 var (
 	hotReloadScript = `<script>
 function initHotReload() {
-	const es = new EventSource("/__hotreload");
-	es.onmessage = function(event) {
-		if (event.data === "updated") {
-			location.reload();
+	if (typeof(EventSource) !== "undefined") {
+		const es = new EventSource("/__hotreload");
+		es.onmessage = function(event) {
+			if (event.data === "updated") {
+				location.reload();
+			}
 		}
+		es.onerror = function(err) {
+			console.error("ES:", err);
+			es.close();
+			setTimeout(initHotReload, 5000);
+		};
 	}
-	es.onerror = function(err) {
-		console.error("ES:", err);
-		es.close();
-		setTimeout(initHotReload, 5000);
-	};
 }
 initHotReload();
 	</script>`
