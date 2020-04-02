@@ -1,4 +1,4 @@
-module github.com/faisalraja/sitegen
+module github.com/altlimit/sitegen
 
 go 1.13
 

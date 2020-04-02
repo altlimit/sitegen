@@ -23,7 +23,7 @@ sitegen -help
 
 ## Built with sitegen
 
-- [altlimit.com](https://www.altlimit.com) - [source](https://github.com/faisalraja/altlimit)
+- [altlimit.com](https://www.altlimit.com) - [source](https://github.com/altlimit/website)
 
 ## File Handlers
 
