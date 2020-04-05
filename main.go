@@ -24,7 +24,7 @@ import (
 
 var (
 	cmdWG   sync.WaitGroup
-	version = "v0.0.7"
+	version = "v0.0.8"
 )
 
 func main() {
@@ -61,6 +61,7 @@ func main() {
 	if isMinify {
 		min = minify.New()
 		min.AddFunc("text/css", css.Minify)
+		min.AddFunc("text/xml", xml.Minify)
 		min.AddFunc("application/js", js.Minify)
 		min.AddFunc("image/svg+xml", svg.Minify)
 		min.Add("text/html", &html.Minifier{

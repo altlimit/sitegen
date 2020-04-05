@@ -14,7 +14,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	texttemplate "text/template"
+	"time"
 
+	"github.com/gobwas/glob"
 	"github.com/tdewolff/minify/v2"
 	"gopkg.in/yaml.v2"
 )
@@ -24,6 +27,10 @@ var (
 		"text/css":               ".css",
 		"application/javascript": ".js",
 		"text/html":              ".html",
+		"text/xml":               ".xml",
+		"application/xml":        ".xml",
+		"text/plain":             ".txt",
+		"text/markdown":          ".md",
 	}
 )
 
@@ -124,18 +131,8 @@ func (sg *SiteGen) sourceList() []*Source {
 	return sources
 }
 
-func (sg *SiteGen) html(s *Source) []byte {
-	content := s.loadContent()
-	if content == nil {
-		return nil
-	}
-	tplName := filepath.Base(s.Local)
-	if n, ok := s.Meta["template"]; ok {
-		tplName = fmt.Sprint(n)
-	}
-
-	tpl := template.New(tplName)
-	tpl = tpl.Funcs(map[string]interface{}{
+func (sg *SiteGen) tplFuncs() map[string]interface{} {
+	return map[string]interface{}{
 		"sort":      sortBy,
 		"limit":     limit,
 		"offset":    offset,
@@ -146,7 +143,22 @@ func (sg *SiteGen) html(s *Source) []byte {
 		"allowJS":   allowJS,
 		"allowHTML": allowHTML,
 		"allowCSS":  allowCSS,
-	})
+		"contains":  contains,
+	}
+}
+
+func (sg *SiteGen) text(s *Source) []byte {
+	content := s.loadContent()
+	if content == nil {
+		return nil
+	}
+	tplName := filepath.Base(s.Local)
+	if n, ok := s.Meta["template"]; ok {
+		tplName = fmt.Sprint(n)
+	}
+
+	tpl := texttemplate.New(tplName)
+	tpl = tpl.Funcs(sg.tplFuncs())
 
 	tplFiles, err := filepath.Glob(filepath.Join(sg.sitePath, sg.templateDir, "*.html"))
 	if err != nil {
@@ -171,6 +183,53 @@ func (sg *SiteGen) html(s *Source) []byte {
 	data["Dev"] = sg.dev
 	data["Source"] = s
 	data["BasePath"] = sg.basePath
+	data["Today"] = time.Now().Format("2006-01-02")
+
+	tplBuf := new(bytes.Buffer)
+	if err := tpl.Execute(tplBuf, data); err != nil {
+		log.Println("Parse execute ", s.Local, " error ", err)
+		return nil
+	}
+	return tplBuf.Bytes()
+}
+
+func (sg *SiteGen) html(s *Source) []byte {
+	content := s.loadContent()
+	if content == nil {
+		return nil
+	}
+	tplName := filepath.Base(s.Local)
+	if n, ok := s.Meta["template"]; ok {
+		tplName = fmt.Sprint(n)
+	}
+
+	tpl := template.New(tplName)
+	tpl = tpl.Funcs(sg.tplFuncs())
+
+	tplFiles, err := filepath.Glob(filepath.Join(sg.sitePath, sg.templateDir, "*.html"))
+	if err != nil {
+		log.Println("Load template ", s.Local, " error ", err)
+		return nil
+	}
+	tpl, err = tpl.ParseFiles(tplFiles...)
+	if err != nil {
+		log.Println("Parse template ", s.Local, " error ", err)
+		return nil
+	}
+	tpl, err = tpl.Parse(string(content))
+	if err != nil {
+		log.Println("Parse ", s.Local, " error ", err)
+		return nil
+	}
+	data := map[string]interface{}{}
+	for k, v := range s.Meta {
+		data[k] = v
+	}
+
+	data["Dev"] = sg.dev
+	data["Source"] = s
+	data["BasePath"] = sg.basePath
+	data["Today"] = time.Now().Format("2006-01-02")
 
 	tplBuf := new(bytes.Buffer)
 	if err := tpl.Execute(tplBuf, data); err != nil {
@@ -234,7 +293,17 @@ func (sg *SiteGen) build(path string) error {
 	}
 
 	pubPath := sg.sourcePath(s)
-	switch s.ext {
+	src := s.loadContent()
+	ext := s.ext
+	// force parse template any file if --- parse: true --- is found
+	if p, ok := s.Meta["parse"]; ok && p.(string) == "text" {
+		ext = ".txt"
+	}
+	parser := sg.html
+	switch ext {
+	case ".txt":
+		parser = sg.text
+		fallthrough
 	case ".html", ".htm":
 		if err := os.MkdirAll(filepath.Dir(pubPath), os.ModePerm); err != nil {
 			return err
@@ -244,14 +313,13 @@ func (sg *SiteGen) build(path string) error {
 			return err
 		}
 		defer pubFile.Close()
-		if body := sg.html(s); body != nil {
+		if body := parser(s); body != nil {
 			_, err = pubFile.Write(body)
 			if err != nil {
 				return err
 			}
 		}
 	default:
-		src := s.loadContent()
 		if src != nil {
 			if serve, ok := s.Meta["serve"]; sg.dev && ok {
 				go runCommand(fmt.Sprint(serve))
@@ -339,14 +407,13 @@ func (sg *SiteGen) localToPath(s *Source) string {
 
 func (sg *SiteGen) getSources(prop string, pattern string) []*Source {
 	filtered := []*Source{}
+	g, err := glob.Compile(pattern)
+	if err != nil {
+		log.Println("Pattern invalid ", pattern)
+		return filtered
+	}
 	for _, s := range sg.sources {
-		val := s.value(prop)
-		match, err := filepath.Match(pattern, val)
-		if err != nil {
-			log.Println("Filter did not match", pattern, " = ", val)
-			continue
-		}
-		if match {
+		if g.Match(s.value(prop)) {
 			filtered = append(filtered, s)
 		}
 	}
@@ -465,6 +532,10 @@ func allowHTML(s string) template.HTML {
 
 func allowCSS(s string) template.CSS {
 	return template.CSS(s)
+}
+
+func contains(sub, s string) bool {
+	return strings.Contains(s, sub)
 }
 
 func sortBy(prop string, order string, sources []*Source) []*Source {

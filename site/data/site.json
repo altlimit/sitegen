@@ -1,4 +1,5 @@
 {
     "title": "Site Home",
-    "description": "Site description"
+    "description": "Site description",
+    "url": "http://example.com"
 }
