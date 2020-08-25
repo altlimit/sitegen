@@ -24,13 +24,13 @@ jobs:
             
             const { repo: { owner, repo }, sha } = context;
             console.log({ owner, repo, sha });
-
+            const releaseName = process.env.GITHUB_REF.split('/').pop();
             const release = await github.repos.createRelease({
                 owner, repo,
-                tag_name: process.env.GITHUB_REF,
-                release_name: 'Release ' + process.env.GITHUB_REF,
+                tag_name: releaseName,
+                release_name: 'Release ' + releaseName,
                 draft: false,
-                body: await fs.readFile('README.md'),
+                body: await fs.readFile('README.md').toString(),
                 target_commitish: sha
             });
 
