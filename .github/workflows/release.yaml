@@ -30,7 +30,7 @@ jobs:
                 tag_name: releaseName,
                 release_name: 'Release ' + releaseName,
                 draft: false,
-                body: await fs.readFile('README.md', 'utf8'),
+                body: await fs.readFile('RELEASE.md', 'utf8'),
                 target_commitish: sha
             });
             console.log('created release', { release });        
