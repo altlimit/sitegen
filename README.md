@@ -25,6 +25,7 @@ sitegen -help
 
 - [altlimit.com](https://www.altlimit.com) - [source](https://github.com/altlimit/website)
 - [wikiyou.org](https://www.wikiyou.org) - [source](https://github.com/altlimit/wikiyou)
+- [blog.shopswired.com](https://blog.shopswired.com/)
 
 ## File Handlers
 
