@@ -30,18 +30,16 @@ jobs:
                 tag_name: releaseName,
                 release_name: 'Release ' + releaseName,
                 draft: false,
-                body: await fs.readFile('README.md').toString(),
+                body: await fs.readFile('README.md', 'utf8'),
                 target_commitish: sha
             });
-
-            console.log('created release', { release });
-        
+            console.log('created release', { release });        
             for (let file of await fs.readdir('./build')) {
                 console.log('uploading', file);
                 await github.repos.uploadReleaseAsset({
                     owner, repo,
                     release_id: release.data.id,
                     name: file,
-                    data: await fs.readFile(`./${file}`)
+                    data: await fs.readFile(`./build/${file}`)
                 });            
             }
