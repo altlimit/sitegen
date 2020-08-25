@@ -30,7 +30,7 @@ jobs:
                 tag_name: process.env.GITHUB_REF,
                 release_name: 'Release ' + process.env.GITHUB_REF,
                 draft: false,
-                body: fs.readFileSync('README.md'),
+                body: await fs.readFile('README.md'),
                 target_commitish: sha
             });
 
