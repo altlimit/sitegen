@@ -24,7 +24,7 @@ import (
 
 var (
 	cmdWG   sync.WaitGroup
-	version = "v0.0.8"
+	version = "v0.0.9"
 )
 
 func main() {

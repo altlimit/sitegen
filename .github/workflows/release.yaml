@@ -1,0 +1,48 @@
+on:
+    push:
+      tags:
+        - 'v*'
+  
+  name: Create Release
+  
+  jobs:
+    build:
+      name: Create Release
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v2
+        - name: Build
+          run: ./build.sh
+        - name: Create Release
+          uses: actions/github-script@v2
+          with:
+            github-token: ${{secrets.GITHUB_TOKEN}}
+            script: |
+              console.log('environment', process.versions);
+              
+              const fs = require('fs').promises;
+              
+              const { repo: { owner, repo }, sha } = context;
+              console.log({ owner, repo, sha });
+
+              const release = await github.repos.createRelease({
+                  owner, repo,
+                  tag_name: process.env.GITHUB_REF,
+                  release_name: 'Release ' + process.env.GITHUB_REF,
+                  draft: false,
+                  body: fs.readFileSync('README.md'),
+                  target_commitish: sha
+              });
+
+              console.log('created release', { release });
+          
+              for (let file of await fs.readdir('./build')) {
+                  console.log('uploading', file);
+                  await github.repos.uploadReleaseAsset({
+                      owner, repo,
+                      release_id: release.data.id,
+                      name: file,
+                      data: await fs.readFile(`./${file}`)
+                  });            
+              }

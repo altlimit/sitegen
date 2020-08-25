@@ -133,17 +133,17 @@ func (sg *SiteGen) sourceList() []*Source {
 
 func (sg *SiteGen) tplFuncs() map[string]interface{} {
 	return map[string]interface{}{
-		"sort":      sortBy,
-		"limit":     limit,
-		"offset":    offset,
-		"path":      sg.path,
-		"sources":   sg.getSources,
-		"data":      sg.data,
-		"json":      parseJSON,
-		"allowJS":   allowJS,
-		"allowHTML": allowHTML,
-		"allowCSS":  allowCSS,
-		"contains":  contains,
+		"sort":     sortBy,
+		"limit":    limit,
+		"offset":   offset,
+		"path":     sg.path,
+		"sources":  sg.getSources,
+		"data":     sg.data,
+		"json":     parseJSON,
+		"js":       allowJS,
+		"html":     allowHTML,
+		"css":      allowCSS,
+		"contains": contains,
 	}
 }
 

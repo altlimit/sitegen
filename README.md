@@ -49,9 +49,9 @@ Uses go html template.
 - sources "(Path|Local|Filename|Meta.\*)" "Pattern" - returns source array that matches pattern
 - data "file.json" - loads any data under data dir
 - json - converts data to json for javascript/json use
-- allowJS - no escape js
-- allowHTML - no escape html
-- allowCSS - no escape
+- js - no escape js
+- html - no escape html
+- css - no escape
 - sort "(Path|Local|Filename|Meta.\*)" "(asc|desc) - orders sources
 - limit n - limits sources
 - offset n - offsets sources
