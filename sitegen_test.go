@@ -124,7 +124,7 @@ func TestLocalToPath(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		testname := fmt.Sprintf("%s", tt.source.Local)
+		testname := tt.source.Local
 		t.Run(testname, func(t *testing.T) {
 			ans := sg.localToPath(tt.source)
 			if ans != tt.want {
@@ -159,7 +159,7 @@ build: npm run prod
 	}
 
 	for _, tt := range tests {
-		testname := fmt.Sprintf("%s", tt.input)
+		testname := tt.input
 		t.Run(testname, func(t *testing.T) {
 			ans1, ans2 := parseContent([]byte(tt.input), tt.sep)
 			if string(ans1) != tt.want1 {
@@ -182,7 +182,7 @@ func TestData(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		testname := fmt.Sprintf("%s", tt.data)
+		testname := tt.data
 		t.Run(testname, func(t *testing.T) {
 			sg.data(tt.data)
 			// todo

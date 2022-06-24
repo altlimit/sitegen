@@ -51,10 +51,10 @@ func main() {
 	flag.StringVar(&tplDir, "templates", "templates", "Template folder relative to site path")
 	flag.StringVar(&publicPath, "public", "./public", "Absolute or relative public path")
 	flag.StringVar(&basePath, "base", "/", "Base folder relative to public path")
-	flag.BoolVar(&serve, "serve", os.Getenv("SERVE") == "1", "Start a development server and watcher")
+	flag.BoolVar(&serve, "serve", false, "Start a development server and watcher")
 	flag.StringVar(&exclude, "exclude", "^(node_modules|bower_components)", "Exclude from watcher")
-	flag.BoolVar(&clean, "clean", os.Getenv("CLEAN") == "1", "Clean public dir before build")
-	flag.BoolVar(&isMinify, "minify", os.Getenv("MINIFY") == "1", "Minify (HTML|JS|CSS)")
+	flag.BoolVar(&clean, "clean", false, "Clean public dir before build")
+	flag.BoolVar(&isMinify, "minify", false, "Minify (HTML|JS|CSS)")
 	flag.StringVar(&port, "port", "8888", "Port for localhost")
 	flag.Parse()
 
@@ -205,11 +205,14 @@ func main() {
 
 		filepath.Walk(sg.sitePath,
 			func(path string, info os.FileInfo, err error) error {
+				if err != nil {
+					log.Fatal("watch dir", path, "error", err)
+				}
 				if info.IsDir() && !strings.HasPrefix(path, sg.publicPath) {
 					if !excluded(exclude, strings.Replace(path, sg.sitePath+string(os.PathSeparator), "", 1)) {
 						err = watcher.Add(path)
 						if err != nil {
-							log.Fatalln("Watch dir ", path, " error ", err)
+							log.Fatal("watch dir", path, "error", err)
 						}
 						return nil
 					}

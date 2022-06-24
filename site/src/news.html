@@ -13,6 +13,7 @@ title: News
     <div class="border shadow m-2 p-4">
         <a href="{{.Path}}">
             {{index .Meta "title"}}
+            <span class="text-sm text-gray-500">{{index .Meta "date"}}</span>
         </a>
         <p>{{index .Meta "summary"}}</p>
     </div>

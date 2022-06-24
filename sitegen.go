@@ -270,16 +270,16 @@ func (sg *SiteGen) remove(path string) error {
 
 	pubPath := sg.sourcePath(s)
 	if err := os.Remove(pubPath); err != nil {
-		return fmt.Errorf("Remove failed for %s: error %v", pubPath, err)
+		return fmt.Errorf("remove failed for %s: error %v", pubPath, err)
 	}
 	pubPath = filepath.Dir(pubPath)
 	empty, err := isDirEmpty(pubPath)
 	if err != nil {
-		return fmt.Errorf("Remove dir check for %s: error %v", pubPath, err)
+		return fmt.Errorf("remove dir check for %s: error %v", pubPath, err)
 	}
 	if empty {
 		if err := os.Remove(pubPath); err != nil {
-			return fmt.Errorf("Remove dir failed for %s: error %v", pubPath, err)
+			return fmt.Errorf("remove dir failed for %s: error %v", pubPath, err)
 		}
 	}
 
@@ -289,7 +289,7 @@ func (sg *SiteGen) remove(path string) error {
 func (sg *SiteGen) build(path string) error {
 	s, ok := sg.sources[path]
 	if !ok {
-		return fmt.Errorf("Build failed for %s: not found", path)
+		return fmt.Errorf("build failed for %s: not found", path)
 	}
 
 	pubPath := sg.sourcePath(s)
@@ -396,9 +396,7 @@ func (sg *SiteGen) localToPath(s *Source) string {
 		switch s.ext {
 		case ".html", ".htm":
 			path = strings.TrimSuffix(path, s.ext)
-			if strings.HasSuffix(path, "index") {
-				path = strings.TrimSuffix(path, "index")
-			}
+			path = strings.TrimSuffix(path, "index")
 		}
 		path = strings.ReplaceAll(path, "\\", "/")
 	}

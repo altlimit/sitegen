@@ -123,7 +123,6 @@ func (ss *staticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				defer ff.Close()
 				dd, err := ff.Stat()
 				if err == nil {
-					name = index
 					d = dd
 					f = ff
 				}
