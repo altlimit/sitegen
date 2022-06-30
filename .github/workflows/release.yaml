@@ -1,45 +1,24 @@
-name: Create Release
+name: "latest-release"
+
 on:
   push:
-    tags:
-      - 'v*'
-    
+    branches:
+      - "master"
+
 jobs:
-  build:
-    name: Create Release
-    runs-on: ubuntu-latest
+  latest-release:
+    name: "Latest Release"
+    runs-on: "ubuntu-latest"
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-      - name: Build
+      - name: "Build"
         run: ./build.sh
-      - name: Create Release
-        uses: actions/github-script@v2
+      - uses: "marvinpinto/action-automatic-releases@latest"
         with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            console.log('environment', process.versions);
-            
-            const fs = require('fs').promises;
-            
-            const { repo: { owner, repo }, sha } = context;
-            console.log({ owner, repo, sha });
-            const releaseName = process.env.GITHUB_REF.split('/').pop();
-            const release = await github.repos.createRelease({
-                owner, repo,
-                tag_name: releaseName,
-                release_name: 'Release ' + releaseName,
-                draft: false,
-                body: await fs.readFile('RELEASE.md', 'utf8'),
-                target_commitish: sha
-            });
-            console.log('created release', { release });        
-            for (let file of await fs.readdir('./build')) {
-                console.log('uploading', file);
-                await github.repos.uploadReleaseAsset({
-                    owner, repo,
-                    release_id: release.data.id,
-                    name: file,
-                    data: await fs.readFile(`./build/${file}`)
-                });            
-            }
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          prerelease: false
+          title: "Latest Build"
+          files: |
+            ./build/*
