@@ -1,8 +1,11 @@
 package main
 
 import (
+	"embed"
+	_ "embed"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -24,8 +27,11 @@ import (
 
 var (
 	cmdWG   sync.WaitGroup
-	version = "v0.0.9"
+	version = "v0.0.10"
 )
+
+//go:embed site/*
+var siteFS embed.FS
 
 func main() {
 	log.Println("sitegen ", version)
@@ -38,6 +44,7 @@ func main() {
 		port       string
 		basePath   string
 		exclude    string
+		create     bool
 		serve      bool
 		clean      bool
 		isMinify   bool
@@ -45,6 +52,7 @@ func main() {
 		ss         *staticServer
 		sg         *SiteGen
 	)
+	flag.BoolVar(&create, "create", false, "Creates a new site template")
 	flag.StringVar(&sitePath, "site", "./site", "Absolute or relative root site path")
 	flag.StringVar(&sourceDir, "source", "src", "Source folder relative to site path")
 	flag.StringVar(&dataDir, "data", "data", "Data folder relative to site path")
@@ -57,6 +65,12 @@ func main() {
 	flag.BoolVar(&isMinify, "minify", false, "Minify (HTML|JS|CSS)")
 	flag.StringVar(&port, "port", "8888", "Port for localhost")
 	flag.Parse()
+
+	if create {
+		copySite("site", sitePath)
+		log.Println("Site template created: ", sitePath)
+		return
+	}
 
 	if isMinify {
 		min = minify.New()
@@ -239,4 +253,27 @@ func excluded(pattern, path string) bool {
 		return true
 	}
 	return m
+}
+
+func copySite(folder, target string) {
+	entries, err := siteFS.ReadDir(folder)
+	if err != nil {
+		log.Fatalf("copySite %s ReadDir error %v", folder, err)
+	}
+	for _, entry := range entries {
+		p := filepath.Join(folder, entry.Name())
+		if entry.IsDir() {
+			copySite(p, target)
+		} else {
+			b, err := siteFS.ReadFile(p)
+			if err != nil {
+				log.Fatalf("copySite ReadFile %s error %v", p, err)
+			}
+			to := filepath.Join(target, p[strings.Index(p, "/"):])
+			os.MkdirAll(filepath.Dir(to), os.ModePerm)
+			if err := ioutil.WriteFile(to, b, 0644); err != nil {
+				log.Fatalf("copySite WriteFile %s error %v", p, err)
+			}
+		}
+	}
 }

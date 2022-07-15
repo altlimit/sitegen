@@ -4,19 +4,28 @@ Sitegen is a simple but flexible static site generator.
 
 ## Setup
 
-Download the sitegen bundles from release page.
+Download the sitegen bundles from release page for windows or install in linux/osx.
 
-Bundled with the executables is a sample website that you can start with. Extract the zip file then run the command below.
+```bash
+# Install under unix/linux env.
+curl -s -S -L https://raw.githubusercontent.com/altlimit/sitegen/master/install.sh | bash
+# Restart your terminal or source your rc file.
 
-```shell
+# Create a new template project
+sitegen -create
+
 # Run sitegen with development server
 sitegen -serve
+
 # Run final build
 sitegen
+
 # Build for github pages, just add -serve to test & add  -minify to minify output
 sitegen -public ./docs
+
 # Build in dist but serve under a subdirectory blog
 sitegen -public ./dist  -base /blog
+
 # For more options
 sitegen -help
 ```
