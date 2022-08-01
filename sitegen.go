@@ -160,7 +160,7 @@ func (sg *SiteGen) text(s *Source) []byte {
 	tpl := texttemplate.New(tplName)
 	tpl = tpl.Funcs(sg.tplFuncs())
 
-	tplFiles, err := filepath.Glob(filepath.Join(sg.sitePath, sg.templateDir, "*.html"))
+	tplFiles, err := filepath.Glob(filepath.Join(sg.sitePath, sg.templateDir, "*.txt"))
 	if err != nil {
 		log.Println("Load template ", s.Local, " error ", err)
 		return nil
@@ -322,10 +322,10 @@ func (sg *SiteGen) build(path string) error {
 	default:
 		if src != nil {
 			if serve, ok := s.Meta["serve"]; sg.dev && ok {
-				go runCommand(fmt.Sprint(serve))
+				runCommand(fmt.Sprint(serve))
 				return nil
 			} else if build, ok := s.Meta["build"]; !sg.dev && ok {
-				go runCommand(fmt.Sprint(build))
+				runCommand(fmt.Sprint(build))
 				return nil
 			} else if sg.minify != nil && (s.ext == ".js" || s.ext == ".css") {
 				if _, ok := parseCtype[s.ctype]; ok {
@@ -501,7 +501,11 @@ func runCommand(run string) {
 		log.Println(err.Error())
 		return
 	}
-	log.Println(string(stdout))
+	out := string(stdout)
+	if out == "" {
+		out = run
+	}
+	log.Println(strings.Trim(out, "\n"))
 }
 
 func fileExt(p string) string {

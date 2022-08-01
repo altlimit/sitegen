@@ -27,7 +27,7 @@ import (
 
 var (
 	cmdWG   sync.WaitGroup
-	version = "v0.0.10"
+	version = "v0.0.11"
 )
 
 //go:embed site/*

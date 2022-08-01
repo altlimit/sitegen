@@ -9,7 +9,7 @@ add_to_path() {
     rcfile=".zshrc";
   fi
   if grep -q "/.altlimit/bin" "$HOME/$rcfile"; then
-    echo "~/.altlimit/bin already in zsh path"
+    echo "~/.altlimit/bin already in $rcfile"
   else
     echo "Adding ~/.altlimit/bin to PATH in $rcfile";
     echo 'export PATH=$PATH:$HOME/.altlimit/bin' >> $HOME/$rcfile;
@@ -32,7 +32,7 @@ install_binary() {
   fi
   chmod +x $HOME/.altlimit/bin/sitegen;
   add_to_path;
-  echo "sitegen has been installed at $HOME/.altlimit/bin - type sitegen --help";
+  echo "sitegen has been installed at $HOME/.altlimit/bin";
 }
 
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
