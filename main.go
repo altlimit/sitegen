@@ -27,7 +27,7 @@ import (
 
 var (
 	cmdWG   sync.WaitGroup
-	version = "v0.0.11"
+	version = "v0.0.12"
 )
 
 //go:embed site/*
@@ -67,7 +67,12 @@ func main() {
 	flag.Parse()
 
 	if create {
-		copySite("site", sitePath)
+		if stat, err := os.Stat(sitePath); err == nil && stat.IsDir() {
+			log.Fatalf("Directory %s exists", sitePath)
+		}
+		if err := copySite("site", sitePath); err != nil {
+			log.Fatalf("Failed to create site: %v", err)
+		}
 		log.Println("Site template created: ", sitePath)
 		return
 	}
@@ -255,25 +260,28 @@ func excluded(pattern, path string) bool {
 	return m
 }
 
-func copySite(folder, target string) {
+func copySite(folder, target string) error {
 	entries, err := siteFS.ReadDir(folder)
 	if err != nil {
-		log.Fatalf("copySite %s ReadDir error %v", folder, err)
+		return fmt.Errorf("copySite %s ReadDir error %v", folder, err)
 	}
 	for _, entry := range entries {
 		p := filepath.Join(folder, entry.Name())
 		if entry.IsDir() {
-			copySite(p, target)
+			if err := copySite(p, target); err != nil {
+				return err
+			}
 		} else {
 			b, err := siteFS.ReadFile(p)
 			if err != nil {
-				log.Fatalf("copySite ReadFile %s error %v", p, err)
+				return fmt.Errorf("copySite ReadFile %s error %v", p, err)
 			}
 			to := filepath.Join(target, p[strings.Index(p, "/"):])
 			os.MkdirAll(filepath.Dir(to), os.ModePerm)
 			if err := ioutil.WriteFile(to, b, 0644); err != nil {
-				log.Fatalf("copySite WriteFile %s error %v", p, err)
+				return fmt.Errorf("copySite WriteFile %s error %v", p, err)
 			}
 		}
 	}
+	return nil
 }

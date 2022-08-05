@@ -60,6 +60,8 @@ type (
 		content []byte
 		sg      *SiteGen
 	}
+
+	Parser func(*Source) []byte
 )
 
 func newSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath string, min *minify.M, clean bool, dev bool) *SiteGen {
@@ -83,7 +85,7 @@ func newSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath string, 
 	// load all sources keyed by local path
 	filepath.Walk(filepath.Join(sg.sitePath, sg.sourceDir),
 		func(path string, info os.FileInfo, err error) error {
-			if info.IsDir() {
+			if info == nil || info.IsDir() {
 				return nil
 			}
 			if strings.HasPrefix(info.Name(), ".") {
@@ -165,10 +167,12 @@ func (sg *SiteGen) text(s *Source) []byte {
 		log.Println("Load template ", s.Local, " error ", err)
 		return nil
 	}
-	tpl, err = tpl.ParseFiles(tplFiles...)
-	if err != nil {
-		log.Println("Parse template ", s.Local, " error ", err)
-		return nil
+	if len(tplFiles) > 0 {
+		tpl, err = tpl.ParseFiles(tplFiles...)
+		if err != nil {
+			log.Println("Parse template ", s.Local, " error ", err)
+			return nil
+		}
 	}
 	tpl, err = tpl.Parse(string(content))
 	if err != nil {
@@ -294,17 +298,25 @@ func (sg *SiteGen) build(path string) error {
 
 	pubPath := sg.sourcePath(s)
 	src := s.loadContent()
-	ext := s.ext
-	// force parse template any file if --- parse: true --- is found
-	if p, ok := s.Meta["parse"]; ok && p.(string) == "text" {
-		ext = ".txt"
+
+	var parser Parser
+	// force parse template any file if --- parse: text --- is found
+	if p, ok := s.Meta["parse"].(string); ok {
+		switch p {
+		case "text":
+			parser = sg.text
+		case "html":
+			parser = sg.html
+		}
+	} else {
+		switch s.ext {
+		case ".txt":
+			parser = sg.text
+		case ".html", ".htm":
+			parser = sg.html
+		}
 	}
-	parser := sg.html
-	switch ext {
-	case ".txt":
-		parser = sg.text
-		fallthrough
-	case ".html", ".htm":
+	if parser != nil {
 		if err := os.MkdirAll(filepath.Dir(pubPath), os.ModePerm); err != nil {
 			return err
 		}
@@ -319,7 +331,7 @@ func (sg *SiteGen) build(path string) error {
 				return err
 			}
 		}
-	default:
+	} else {
 		if src != nil {
 			if serve, ok := s.Meta["serve"]; sg.dev && ok {
 				runCommand(fmt.Sprint(serve))
@@ -344,7 +356,6 @@ func (sg *SiteGen) build(path string) error {
 			return err
 		}
 	}
-
 	return nil
 }
 
