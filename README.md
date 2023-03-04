@@ -65,5 +65,14 @@ Uses go html template.
 - sort "(Path|Local|Filename|Meta.\*)" "(asc|desc) - orders sources
 - limit n - limits sources
 - offset n - offsets sources
-- paginate n - create pagination with total "n", "Page" and "Pages" becomes available for creating links
-- pages n - for .Pages or any number to loop and returns each number
+- paginate n - paginate a list while providing page limit "n", "Page" and "Pages" is populated in current page
+- pages Source - returns list of pages with Path, Page & Active properties for creating links
+
+## Page variables
+
+All yaml meta data are in each page are available plus values below.
+
+- Dev - true when it's -serve mode
+- Source - current page source
+- BasePath - base path from provided base path param (defaults to /)
+- Today - current day YYYY-MM-DD at build time

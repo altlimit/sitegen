@@ -18,7 +18,7 @@ func TestGetSources(t *testing.T) {
 		want    int
 	}{
 		{"/img/promo.svg", "Path", 1},
-		{"/news/*", "Path", 4},
+		{"/news/*", "Path", 5},
 		{"**about.html", "Filename", 1},
 		{"index.html", "Filename", 1},
 		{"Homepage", "Meta.title", 0},
@@ -91,8 +91,8 @@ func TestSort(t *testing.T) {
 		order string
 		want  []string
 	}{
-		{"Meta.date", "desc", []string{"2020-01-04", "2020-01-03", "2020-01-02", "2020-01-01"}},
-		{"Meta.date", "asc", []string{"2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04"}},
+		{"Meta.date", "desc", []string{"2020-01-05", "2020-01-04", "2020-01-03", "2020-01-02", "2020-01-01"}},
+		{"Meta.date", "asc", []string{"2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04", "2020-01-05"}},
 	}
 
 	for _, tt := range tests {

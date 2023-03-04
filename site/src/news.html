@@ -18,8 +18,12 @@ title: News
         <p>{{index .Meta "summary"}}</p>
     </div>
     {{end}}
-    {{range pages .Pages}}
-        <a href="{{$.Source.Path}}/{{.}}">{{.}}</a>
+    {{range pages .Source}}
+        {{if .Active}}
+            {{.Page}}
+        {{else}}
+            <a href="{{.Path}}">{{.Page}}</a>
+        {{end}}
     {{end}}
 </div>
 {{end}}

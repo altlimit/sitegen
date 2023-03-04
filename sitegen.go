@@ -68,6 +68,11 @@ type (
 	}
 
 	Parser func(*Source) []byte
+	Page   struct {
+		Active bool
+		Path   string
+		Page   int
+	}
 )
 
 func newSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath string, min *minify.M, clean bool, dev bool) *SiteGen {
@@ -598,10 +603,14 @@ func offset(offset int, sources []*Source) []*Source {
 	return sources[offset:]
 }
 
-func pages(total int) (pages []int) {
-	if total > 1 {
-		for i := 1; i <= total; i++ {
-			pages = append(pages, i)
+func pages(s *Source) (pages []Page) {
+	if s.pages > 1 {
+		for i := 1; i <= s.pages; i++ {
+			pages = append(pages, Page{
+				Path:   s.Path + "/" + strconv.Itoa(i),
+				Page:   i,
+				Active: i == s.page,
+			})
 		}
 	}
 	return
