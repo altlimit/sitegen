@@ -8,11 +8,14 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"mime"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	texttemplate "text/template"
 	"time"
@@ -55,10 +58,13 @@ type (
 		Path  string
 		Meta  map[string]interface{}
 
-		ext     string
-		ctype   string
-		content []byte
-		sg      *SiteGen
+		ext      string
+		ctype    string
+		content  []byte
+		sg       *SiteGen
+		page     int
+		pages    int
+		children []*Source
 	}
 
 	Parser func(*Source) []byte
@@ -146,10 +152,11 @@ func (sg *SiteGen) tplFuncs() map[string]interface{} {
 		"html":     allowHTML,
 		"css":      allowCSS,
 		"contains": contains,
+		"pages":    pages,
 	}
 }
 
-func (sg *SiteGen) text(s *Source) []byte {
+func (sg SiteGen) parse(s *Source, t string) []byte {
 	content := s.loadContent()
 	if content == nil {
 		return nil
@@ -159,10 +166,44 @@ func (sg *SiteGen) text(s *Source) []byte {
 		tplName = fmt.Sprint(n)
 	}
 
-	tpl := texttemplate.New(tplName)
-	tpl = tpl.Funcs(sg.tplFuncs())
+	data := map[string]interface{}{}
+	for k, v := range s.Meta {
+		data[k] = v
+	}
 
-	tplFiles, err := filepath.Glob(filepath.Join(sg.sitePath, sg.templateDir, "*.txt"))
+	funcs := sg.tplFuncs()
+	funcs["paginate"] = func(limit int, list interface{}) interface{} {
+		rv := reflect.ValueOf(list)
+		if rv.Kind() != reflect.Slice {
+			panic("paginate must be of type Slice got " + rv.Type().String())
+		}
+		if s.page == 0 {
+			s.pages = int(math.Ceil(float64(rv.Len()) / float64(limit)))
+			s.page = 1
+			for i := 1; i <= s.pages; i++ {
+				sp := *s
+				p := strconv.Itoa(i)
+				sp.Path += "/" + p
+				sp.Name = p + sp.ext
+				sp.page = i
+				s.children = append(s.children, &sp)
+			}
+		}
+		data["Page"] = s.page
+		data["Pages"] = s.pages
+		start := s.page - 1
+		start = start * limit
+		end := start + limit
+		if end > rv.Len() {
+			end = rv.Len()
+		}
+		return rv.Slice(start, end).Interface()
+	}
+
+	tpl := texttemplate.New(tplName)
+	tpl = tpl.Funcs(funcs)
+
+	tplFiles, err := filepath.Glob(filepath.Join(sg.sitePath, sg.templateDir, "*."+t))
 	if err != nil {
 		log.Println("Load template ", s.Local, " error ", err)
 		return nil
@@ -179,11 +220,6 @@ func (sg *SiteGen) text(s *Source) []byte {
 		log.Println("Parse ", s.Local, " error ", err)
 		return nil
 	}
-	data := map[string]interface{}{}
-	for k, v := range s.Meta {
-		data[k] = v
-	}
-
 	data["Dev"] = sg.dev
 	data["Source"] = s
 	data["BasePath"] = sg.basePath
@@ -193,63 +229,28 @@ func (sg *SiteGen) text(s *Source) []byte {
 	if err := tpl.Execute(tplBuf, data); err != nil {
 		log.Println("Parse execute ", s.Local, " error ", err)
 		return nil
+	}
+	if t == "html" {
+		body := tplBuf.Bytes()
+		if sg.minify != nil {
+			b, err := sg.minify.Bytes("text/html", body)
+			if err != nil {
+				log.Println("Minify ", s.Local, " error ", err)
+			} else {
+				body = b
+			}
+		}
+		return body
 	}
 	return tplBuf.Bytes()
 }
 
+func (sg *SiteGen) text(s *Source) []byte {
+	return sg.parse(s, "txt")
+}
+
 func (sg *SiteGen) html(s *Source) []byte {
-	content := s.loadContent()
-	if content == nil {
-		return nil
-	}
-	tplName := filepath.Base(s.Local)
-	if n, ok := s.Meta["template"]; ok {
-		tplName = fmt.Sprint(n)
-	}
-
-	tpl := template.New(tplName)
-	tpl = tpl.Funcs(sg.tplFuncs())
-
-	tplFiles, err := filepath.Glob(filepath.Join(sg.sitePath, sg.templateDir, "*.html"))
-	if err != nil {
-		log.Println("Load template ", s.Local, " error ", err)
-		return nil
-	}
-	tpl, err = tpl.ParseFiles(tplFiles...)
-	if err != nil {
-		log.Println("Parse template ", s.Local, " error ", err)
-		return nil
-	}
-	tpl, err = tpl.Parse(string(content))
-	if err != nil {
-		log.Println("Parse ", s.Local, " error ", err)
-		return nil
-	}
-	data := map[string]interface{}{}
-	for k, v := range s.Meta {
-		data[k] = v
-	}
-
-	data["Dev"] = sg.dev
-	data["Source"] = s
-	data["BasePath"] = sg.basePath
-	data["Today"] = time.Now().Format("2006-01-02")
-
-	tplBuf := new(bytes.Buffer)
-	if err := tpl.Execute(tplBuf, data); err != nil {
-		log.Println("Parse execute ", s.Local, " error ", err)
-		return nil
-	}
-	body := tplBuf.Bytes()
-	if sg.minify != nil {
-		b, err := sg.minify.Bytes("text/html", body)
-		if err != nil {
-			log.Println("Minify ", s.Local, " error ", err)
-		} else {
-			body = b
-		}
-	}
-	return body
+	return sg.parse(s, "html")
 }
 
 func (sg *SiteGen) sourcePath(s *Source) string {
@@ -325,10 +326,27 @@ func (sg *SiteGen) build(path string) error {
 			return err
 		}
 		defer pubFile.Close()
+
 		if body := parser(s); body != nil {
 			_, err = pubFile.Write(body)
 			if err != nil {
 				return err
+			}
+			for _, cs := range s.children {
+				childPath := sg.sourcePath(cs)
+				if err := os.MkdirAll(filepath.Dir(childPath), os.ModePerm); err != nil {
+					return err
+				}
+				childFile, err := os.Create(childPath)
+				if err != nil {
+					return err
+				}
+				_, err = childFile.Write(parser(cs))
+				if err != nil {
+					childFile.Close()
+					return err
+				}
+				childFile.Close()
 			}
 		}
 	} else {
@@ -578,6 +596,15 @@ func offset(offset int, sources []*Source) []*Source {
 		return []*Source{}
 	}
 	return sources[offset:]
+}
+
+func pages(total int) (pages []int) {
+	if total > 1 {
+		for i := 1; i <= total; i++ {
+			pages = append(pages, i)
+		}
+	}
+	return
 }
 
 func isDirEmpty(name string) (bool, error) {

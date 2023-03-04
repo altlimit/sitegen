@@ -65,3 +65,5 @@ Uses go html template.
 - sort "(Path|Local|Filename|Meta.\*)" "(asc|desc) - orders sources
 - limit n - limits sources
 - offset n - offsets sources
+- paginate n - create pagination with total "n", "Page" and "Pages" becomes available for creating links
+- pages n - for .Pages or any number to loop and returns each number
