@@ -18,12 +18,14 @@ title: News
         <p>{{index .Meta "summary"}}</p>
     </div>
     {{end}}
+    <div class="pl-3 pt-1">
     {{range pages .Source}}
         {{if .Active}}
-            {{.Page}}
+            <span class="border bg-blue-800 p-2">{{.Page}}</span>
         {{else}}
-            <a href="{{.Path}}">{{.Page}}</a>
+            <a href="{{.Path}}" class="border shadow p-2">{{.Page}}</a>
         {{end}}
     {{end}}
+    </div>
 </div>
 {{end}}

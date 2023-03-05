@@ -185,13 +185,15 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 		if s.page == 0 {
 			s.pages = int(math.Ceil(float64(rv.Len()) / float64(limit)))
 			s.page = 1
-			for i := 1; i <= s.pages; i++ {
-				sp := *s
-				p := strconv.Itoa(i)
-				sp.Path += "/" + p
-				sp.Name = p + sp.ext
-				sp.page = i
-				s.children = append(s.children, &sp)
+			if s.pages > 1 {
+				for i := 2; i <= s.pages; i++ {
+					sp := *s
+					p := strconv.Itoa(i)
+					sp.Path += "/" + p
+					sp.Name = p + sp.ext
+					sp.page = i
+					s.children = append(s.children, &sp)
+				}
 			}
 		}
 		data["Page"] = s.page
@@ -460,6 +462,9 @@ func (s *Source) reloadContent() []byte {
 
 func (s *Source) loadContent() []byte {
 	if s.content == nil {
+		s.page = 0
+		s.pages = 0
+		s.children = nil
 		var (
 			meta    []byte
 			content []byte
@@ -606,11 +611,15 @@ func offset(offset int, sources []*Source) []*Source {
 func pages(s *Source) (pages []Page) {
 	if s.pages > 1 {
 		for i := 1; i <= s.pages; i++ {
-			pages = append(pages, Page{
-				Path:   s.Path + "/" + strconv.Itoa(i),
+			p := Page{
+				Path:   s.Path,
 				Page:   i,
 				Active: i == s.page,
-			})
+			}
+			if i > 1 {
+				p.Path += "/" + strconv.Itoa(i)
+			}
+			pages = append(pages, p)
 		}
 	}
 	return
