@@ -1,0 +1,18 @@
+---
+template: main.html
+title: Post
+---
+
+{{define "content"}}
+{{ $posts := data "posts.json" }}
+{{ $post := index $posts .Path }}
+<h1>
+    Posts sample for parameterized page
+</h1>
+
+<div class="my-8">
+    <div class="border shadow m-2 p-4">
+        {{index $post "by"}}: {{index $post "body"}}
+    </div>
+</div>
+{{end}}

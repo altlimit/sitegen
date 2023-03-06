@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -83,6 +84,34 @@ func TestLimit(t *testing.T) {
 	}
 }
 
+func TestMapToList(t *testing.T) {
+	sg := testSiteGen()
+
+	data := sg.data("site.json")
+	val, ok := data.(map[string]interface{})
+	if !ok {
+		t.Errorf("expected site.json map[string]interface got %T", data)
+	}
+	list := mapToList(val)
+	var tests = []struct {
+		key   string
+		value string
+	}{
+		{"title", "Site Home"},
+		{"description", "Site description"},
+		{"url", "http://example.com"},
+	}
+	for i, tt := range tests {
+		kv := list[i]
+		if kv.Key != tt.key {
+			t.Errorf("expects %s got %s", tt.key, kv.Key)
+		}
+		if kv.Value != tt.value {
+			t.Errorf("expects %s got %s", tt.value, kv.Value)
+		}
+	}
+}
+
 func TestSort(t *testing.T) {
 	sg := testSiteGen()
 	sources := sg.getSources("Path", "/news/*")
@@ -96,12 +125,98 @@ func TestSort(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		testname := fmt.Sprintf("%s,%s", tt.by, tt.order)
+		testname := fmt.Sprintf("sort sources %s,%s", tt.by, tt.order)
 		t.Run(testname, func(t *testing.T) {
 			ans := sortBy(tt.by, tt.order, sources)
 			for i, w := range tt.want {
-				if ans[i].Meta["date"] != w {
-					t.Errorf("got %v, want %v", ans, tt.want)
+				a, ok := ans[i].(*Source)
+				if !ok {
+					t.Errorf("%s expects *Source got %T", tt.order, ans[i])
+				} else if a.Meta["date"] != w {
+					t.Errorf("%s got %v, want %v", tt.order, a.Meta["date"], w)
+				}
+			}
+		})
+	}
+
+	var testJson = []struct {
+		by    string
+		order string
+		want  []string
+	}{
+		{"name", "desc", []string{"News", "Home", "Contact", "About"}},
+		{"name", "asc", []string{"About", "Contact", "Home", "News"}},
+	}
+	data := sg.data("links.json")
+	for _, tt := range testJson {
+		testname := fmt.Sprintf("sort links.json %s,%s", tt.by, tt.order)
+		t.Run(testname, func(t *testing.T) {
+			ans := sortBy(tt.by, tt.order, data)
+			for i, w := range tt.want {
+				a, ok := ans[i].(map[string]interface{})
+				if !ok {
+					t.Errorf("%s expects *Source got %T", tt.order, ans[i])
+				} else if a[tt.by] != w {
+					t.Errorf("%s got %v, want %v", tt.order, a[tt.by], w)
+				}
+			}
+		})
+	}
+
+	var testSortedMap = []struct {
+		by    string
+		order string
+		want  []string
+	}{
+		{"Key", "desc", []string{"url", "title", "description"}},
+		{"Key", "asc", []string{"description", "title", "url"}},
+	}
+	val := sg.data("site.json").(map[string]interface{})
+	list := mapToList(val)
+	for _, tt := range testSortedMap {
+		testname := fmt.Sprintf("sort map %s,%s", tt.by, tt.order)
+		t.Run(testname, func(t *testing.T) {
+			ans := sortBy(tt.by, tt.order, list)
+			for i, w := range tt.want {
+				a, ok := ans[i].(kv)
+				if !ok {
+					t.Errorf("%s expects kv got %T", tt.order, ans[i])
+				} else if a.Key != w {
+					t.Errorf("%s got %v, want %v", tt.order, a.Key, w)
+				}
+			}
+		})
+	}
+}
+
+func TestFilter(t *testing.T) {
+	var d interface{}
+	data := []byte(`[
+		{"Page":"Abc"},
+		{"Page":"A2c"},
+		{"Page":"def"}
+	]`)
+	if err := json.Unmarshal(data, &d); err != nil {
+		t.Fatalf("failed unmarshal %v", err)
+	}
+	var tests = []struct {
+		by      string
+		pattern string
+		want    []string
+	}{
+		{"Page", `^[A-Za-z]+$`, []string{"Abc", "def"}},
+		{"Page", `\d+`, []string{"A2c"}},
+	}
+	for _, tt := range tests {
+		testname := fmt.Sprintf("filter %s,%s", tt.by, tt.pattern)
+		t.Run(testname, func(t *testing.T) {
+			ans := filterBy(tt.by, tt.pattern, d)
+			for i, w := range tt.want {
+				a, ok := ans[i].(map[string]interface{})
+				if !ok {
+					t.Errorf("%s expects kv got %T", tt.pattern, ans[i])
+				} else if a[tt.by] != w {
+					t.Errorf("%s got %v, want %v", tt.pattern, a[tt.by], w)
 				}
 			}
 		})

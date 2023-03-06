@@ -11,6 +11,10 @@
         "name": "News"
     },
     {
+        "path": "/posts",
+        "name": "Posts"
+    },
+    {
         "path": "/contact",
         "name": "Contact"
     }

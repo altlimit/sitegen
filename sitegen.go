@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -64,6 +65,7 @@ type (
 		sg       *SiteGen
 		page     int
 		pages    int
+		path     string
 		children []*Source
 	}
 
@@ -72,6 +74,11 @@ type (
 		Active bool
 		Path   string
 		Page   int
+	}
+
+	kv struct {
+		Key   string
+		Value interface{}
 	}
 )
 
@@ -106,7 +113,7 @@ func newSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath string, 
 				log.Println(path, " error ", err)
 				return nil
 			}
-			_, err = sg.newSource(path)
+			_, err = sg.newSource(path, false)
 			if err != nil {
 				log.Println(path, " failed source ", err)
 				return nil
@@ -117,7 +124,7 @@ func newSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath string, 
 	return sg
 }
 
-func (sg *SiteGen) newSource(path string) (*Source, error) {
+func (sg *SiteGen) newSource(path string, gen bool) (*Source, error) {
 	s := &Source{
 		Name: filepath.Base(path),
 		ext:  fileExt(path),
@@ -132,7 +139,9 @@ func (sg *SiteGen) newSource(path string) (*Source, error) {
 	}
 	s.sg = sg
 	s.loadContent()
-	sg.sources[path] = s
+	if !gen {
+		sg.sources[path] = s
+	}
 	return s, nil
 }
 
@@ -158,6 +167,8 @@ func (sg *SiteGen) tplFuncs() map[string]interface{} {
 		"css":      allowCSS,
 		"contains": contains,
 		"pages":    pages,
+		"select":   mapToList,
+		"filter":   filterBy,
 	}
 }
 
@@ -171,16 +182,32 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 		tplName = fmt.Sprint(n)
 	}
 
-	data := map[string]interface{}{}
-	for k, v := range s.Meta {
-		data[k] = v
-	}
-
 	funcs := sg.tplFuncs()
+	funcs["page"] = func(source, path string) string {
+		var sp *Source
+		for i := range s.children {
+			if s.children[i].path == path {
+				sp = s.children[i]
+				break
+			}
+		}
+		if sp == nil {
+			var err error
+			sp, err = sg.newSource(filepath.Join(sg.sitePath, sg.sourceDir, source), true)
+			if err != nil {
+				log.Println("page source error", err)
+			}
+			sp.Path += "/" + path
+			sp.Name = path + sp.ext
+			sp.path = path
+			s.children = append(s.children, sp)
+		}
+		return sp.Path
+	}
 	funcs["paginate"] = func(limit int, list interface{}) interface{} {
 		rv := reflect.ValueOf(list)
 		if rv.Kind() != reflect.Slice {
-			panic("paginate must be of type Slice got " + rv.Type().String())
+			log.Println("paginate must be of type Slice got " + rv.Type().String())
 		}
 		if s.page == 0 {
 			s.pages = int(math.Ceil(float64(rv.Len()) / float64(limit)))
@@ -196,8 +223,6 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 				}
 			}
 		}
-		data["Page"] = s.page
-		data["Pages"] = s.pages
 		start := s.page - 1
 		start = start * limit
 		end := start + limit
@@ -227,6 +252,14 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 		log.Println("Parse ", s.Local, " error ", err)
 		return nil
 	}
+
+	data := map[string]interface{}{}
+	for k, v := range s.Meta {
+		data[k] = v
+	}
+	data["Path"] = s.path
+	data["Page"] = s.page
+	data["Pages"] = s.pages
 	data["Dev"] = sg.dev
 	data["Source"] = s
 	data["BasePath"] = sg.basePath
@@ -303,7 +336,6 @@ func (sg *SiteGen) build(path string) error {
 	if !ok {
 		return fmt.Errorf("build failed for %s: not found", path)
 	}
-
 	pubPath := sg.sourcePath(s)
 	src := s.loadContent()
 
@@ -579,19 +611,80 @@ func contains(sub, s string) bool {
 	return strings.Contains(s, sub)
 }
 
-func sortBy(prop string, order string, sources []*Source) []*Source {
-	sorted := make([]*Source, len(sources))
-	copy(sorted, sources)
-	if order == "desc" {
-		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].value(prop) > sorted[j].value(prop)
-		})
-	} else {
-		sort.Slice(sorted, func(i, j int) bool {
-			return sorted[i].value(prop) < sorted[j].value(prop)
-		})
+func sortBy(prop string, order string, list interface{}) (result []interface{}) {
+	rv := reflect.ValueOf(list)
+	if rv.Kind() != reflect.Slice {
+		log.Println("sort must be of type Slice got " + rv.Type().String())
 	}
-	return sorted
+
+	sorted := reflect.MakeSlice(rv.Type(), rv.Len(), rv.Len())
+	reflect.Copy(sorted, rv)
+	sort.Slice(sorted.Interface(), func(i, j int) bool {
+		if order == "desc" {
+			return valueOf(prop, sorted.Index(i)) > valueOf(prop, sorted.Index(j))
+		}
+		return valueOf(prop, sorted.Index(i)) < valueOf(prop, sorted.Index(j))
+	})
+
+	for i := 0; i < sorted.Len(); i++ {
+		result = append(result, sorted.Index(i).Interface())
+	}
+	return
+}
+
+func valueOf(key string, a reflect.Value) string {
+	v := a.Interface()
+	if src, ok := v.(*Source); ok {
+		return src.value(key)
+	}
+	if val, ok := v.(kv); ok {
+		if key == "Key" {
+			return val.Key
+		} else if key == "Value" {
+			if v, ok := val.Value.(string); ok {
+				return v
+			}
+		} else if strings.HasPrefix(key, "Value.") {
+			key = strings.Split(key, ".")[1]
+			v = val.Value
+		}
+
+	}
+	if val, ok := v.(map[string]interface{}); ok {
+		if v, ok := val[key]; ok {
+			if vv, ok := v.(string); ok {
+				return vv
+			}
+		}
+	}
+	return ""
+}
+
+func filterBy(prop string, pattern string, list interface{}) (result []interface{}) {
+	rv := reflect.ValueOf(list)
+	if rv.Kind() != reflect.Slice {
+		log.Println("sort must be of type Slice got " + rv.Type().String())
+	}
+
+	for i := 0; i < rv.Len(); i++ {
+		v := rv.Index(i)
+		val := valueOf(prop, v)
+		ok, err := regexp.Match(pattern, []byte(val))
+		if err != nil {
+			log.Println("filter match error", err)
+		}
+		if ok {
+			result = append(result, v.Interface())
+		}
+	}
+	return
+}
+
+func mapToList(d map[string]interface{}) (result []kv) {
+	for k, v := range d {
+		result = append(result, kv{Key: k, Value: v})
+	}
+	return
 }
 
 func limit(limit int, sources []*Source) []*Source {

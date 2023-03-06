@@ -1,0 +1,22 @@
+{
+    "post1": {
+        "by": "Author 1",
+        "body": "Sample post 1"
+    },
+    "post2": {
+        "by": "Author 2",
+        "body": "Sample post 2"
+    },
+    "post3": {
+        "by": "Author 1",
+        "body": "Sample post 3"
+    },
+    "post4": {
+        "by": "Author 2",
+        "body": "Sample post 4"
+    },
+    "post5": {
+        "by": "Author 1",
+        "body": "Sample post 5"
+    }
+}

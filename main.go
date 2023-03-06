@@ -149,7 +149,7 @@ func main() {
 						if s, ok := sg.sources[pp]; ok {
 							s.reloadContent()
 						} else {
-							if _, err := sg.newSource(pp); err != nil {
+							if _, err := sg.newSource(pp, false); err != nil {
 								log.Println(path, " failed source ", err)
 							}
 						}
