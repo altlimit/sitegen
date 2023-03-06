@@ -50,6 +50,7 @@ type (
 		minify      *minify.M
 		clean       bool
 		sources     map[string]*Source
+		genSources  []*Source
 		dev         bool
 	}
 	// Source is a resource
@@ -59,14 +60,13 @@ type (
 		Path  string
 		Meta  map[string]interface{}
 
-		ext      string
-		ctype    string
-		content  []byte
-		sg       *SiteGen
-		page     int
-		pages    int
-		path     string
-		children []*Source
+		ext     string
+		ctype   string
+		content []byte
+		sg      *SiteGen
+		page    int
+		pages   int
+		path    string
 	}
 
 	Parser func(*Source) []byte
@@ -185,9 +185,9 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 	funcs := sg.tplFuncs()
 	funcs["page"] = func(source, path string) string {
 		var sp *Source
-		for i := range s.children {
-			if s.children[i].path == path {
-				sp = s.children[i]
+		for i := range sg.genSources {
+			if sg.genSources[i].path == path {
+				sp = sg.genSources[i]
 				break
 			}
 		}
@@ -200,7 +200,7 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 			sp.Path += "/" + path
 			sp.Name = path + sp.ext
 			sp.path = path
-			s.children = append(s.children, sp)
+			s.sg.genSources = append(s.sg.genSources, sp)
 		}
 		return sp.Path
 	}
@@ -219,7 +219,7 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 					sp.Path += "/" + p
 					sp.Name = p + sp.ext
 					sp.page = i
-					s.children = append(s.children, &sp)
+					sp.sg.genSources = append(sp.sg.genSources, &sp)
 				}
 			}
 		}
@@ -336,8 +336,14 @@ func (sg *SiteGen) build(path string) error {
 	if !ok {
 		return fmt.Errorf("build failed for %s: not found", path)
 	}
+
 	pubPath := sg.sourcePath(s)
 	src := s.loadContent()
+
+	// check if parametarized page then skip if no parameter
+	if strings.Contains(string(src), " .Path") && s.path == "" {
+		return nil
+	}
 
 	var parser Parser
 	// force parse template any file if --- parse: text --- is found
@@ -371,22 +377,27 @@ func (sg *SiteGen) build(path string) error {
 			if err != nil {
 				return err
 			}
-			for _, cs := range s.children {
-				childPath := sg.sourcePath(cs)
-				if err := os.MkdirAll(filepath.Dir(childPath), os.ModePerm); err != nil {
-					return err
-				}
-				childFile, err := os.Create(childPath)
-				if err != nil {
-					return err
-				}
-				_, err = childFile.Write(parser(cs))
-				if err != nil {
-					childFile.Close()
-					return err
-				}
-				childFile.Close()
+		}
+		for {
+			if len(sg.genSources) == 0 {
+				break
 			}
+			cs := sg.genSources[0]
+			sg.genSources = sg.genSources[1:]
+			childPath := sg.sourcePath(cs)
+			if err := os.MkdirAll(filepath.Dir(childPath), os.ModePerm); err != nil {
+				return err
+			}
+			childFile, err := os.Create(childPath)
+			if err != nil {
+				return err
+			}
+			_, err = childFile.Write(parser(cs))
+			if err != nil {
+				childFile.Close()
+				return err
+			}
+			childFile.Close()
 		}
 	} else {
 		if src != nil {
@@ -416,14 +427,18 @@ func (sg *SiteGen) build(path string) error {
 	return nil
 }
 
-func (sg *SiteGen) buildAll() {
+func (sg *SiteGen) buildAll(reload bool) {
 	out := make(map[string]int)
 	if sg.clean {
 		if err := os.RemoveAll(sg.publicPath); err != nil {
 			log.Fatalln("Failed to clean ", sg.publicPath, " error ", err)
 		}
 	}
+	sg.genSources = nil
 	for k, s := range sg.sources {
+		if reload {
+			s.reloadContent()
+		}
 		out[s.ext]++
 		if err := sg.build(k); err != nil {
 			log.Println("Build ", k, " error ", err)
@@ -496,7 +511,6 @@ func (s *Source) loadContent() []byte {
 	if s.content == nil {
 		s.page = 0
 		s.pages = 0
-		s.children = nil
 		var (
 			meta    []byte
 			content []byte
@@ -687,18 +701,28 @@ func mapToList(d map[string]interface{}) (result []kv) {
 	return
 }
 
-func limit(limit int, sources []*Source) []*Source {
-	if limit >= len(sources) {
-		return sources
+func limit(limit int, list interface{}) interface{} {
+	rv := reflect.ValueOf(list)
+	if rv.Kind() != reflect.Slice {
+		log.Println("sort must be of type Slice got " + rv.Type().String())
 	}
-	return sources[:limit]
+
+	if limit >= rv.Len() {
+		return list
+	}
+	return rv.Slice(0, limit).Interface()
 }
 
-func offset(offset int, sources []*Source) []*Source {
-	if offset >= len(sources) {
-		return []*Source{}
+func offset(offset int, list interface{}) interface{} {
+	rv := reflect.ValueOf(list)
+	if rv.Kind() != reflect.Slice {
+		log.Println("sort must be of type Slice got " + rv.Type().String())
 	}
-	return sources[offset:]
+
+	if offset >= rv.Len() {
+		return reflect.MakeSlice(rv.Type(), 0, 0).Interface()
+	}
+	return rv.Slice(offset, rv.Len()).Interface()
 }
 
 func pages(s *Source) (pages []Page) {

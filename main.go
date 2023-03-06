@@ -48,6 +48,7 @@ func main() {
 		serve      bool
 		clean      bool
 		isMinify   bool
+		buildAll   bool
 		min        *minify.M
 		ss         *staticServer
 		sg         *SiteGen
@@ -63,6 +64,7 @@ func main() {
 	flag.StringVar(&exclude, "exclude", "^(node_modules|bower_components)", "Exclude from watcher")
 	flag.BoolVar(&clean, "clean", false, "Clean public dir before build")
 	flag.BoolVar(&isMinify, "minify", false, "Minify (HTML|JS|CSS)")
+	flag.BoolVar(&buildAll, "buildall", false, "Always build all on change")
 	flag.StringVar(&port, "port", "8888", "Port for localhost")
 	flag.Parse()
 
@@ -104,7 +106,7 @@ func main() {
 		basePath = "/" + strings.Trim(basePath, "/") + "/"
 	}
 	sg = newSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath, min, clean, serve)
-	sg.buildAll()
+	sg.buildAll(false)
 
 	if sg.dev {
 		ss = newStaticServer(pubPath, basePath)
@@ -158,8 +160,11 @@ func main() {
 						} else {
 							log.Println("Rebuilt: ", rp)
 						}
+						if buildAll {
+							sg.buildAll(true)
+						}
 					} else {
-						sg.buildAll()
+						sg.buildAll(true)
 					}
 				case "del":
 					if isSrc {
@@ -168,8 +173,11 @@ func main() {
 						} else {
 							log.Println("Deleted: ", rp)
 						}
+						if buildAll {
+							sg.buildAll(true)
+						}
 					} else {
-						sg.buildAll()
+						sg.buildAll(true)
 					}
 				}
 			}

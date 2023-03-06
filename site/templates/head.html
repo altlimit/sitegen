@@ -1,7 +1,7 @@
 {{define "head"}}
 {{$site := data "site.json"}}
 <meta charset="utf-8">
-<title>{{if .title}} {{.title}} -{{end}} {{$site.title}}</title>
+<title>{{if .title}}{{.title}}{{else}}{{template "title" .}}{{end}} - {{$site.title}}</title>
 <meta name="description" content="{{$site.description}}">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
 <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/1.2.0/tailwind.min.css" rel="stylesheet">
@@ -10,3 +10,4 @@
 {{end}}
 
 {{define "addHead"}}{{end}}
+{{define "title"}}{{end}}

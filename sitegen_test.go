@@ -52,7 +52,11 @@ func TestOffset(t *testing.T) {
 	for _, tt := range tests {
 		testname := fmt.Sprintf("%d", tt.offset)
 		t.Run(testname, func(t *testing.T) {
-			ans := len(offset(tt.offset, sources))
+			scs, ok := offset(tt.offset, sources).([]*Source)
+			if !ok {
+				t.Errorf("expected []*Source type got %v", scs)
+			}
+			ans := len(scs)
 			if ans != tt.want {
 				t.Errorf("got %d, want %d", ans, tt.want)
 			}
@@ -76,7 +80,11 @@ func TestLimit(t *testing.T) {
 	for _, tt := range tests {
 		testname := fmt.Sprintf("%d", tt.limit)
 		t.Run(testname, func(t *testing.T) {
-			ans := len(limit(tt.limit, sources))
+			scs, ok := limit(tt.limit, sources).([]*Source)
+			if !ok {
+				t.Errorf("expected []*Source type got %v", scs)
+			}
+			ans := len(scs)
 			if ans != tt.want {
 				t.Errorf("got %d, want %d", ans, tt.want)
 			}
@@ -93,21 +101,9 @@ func TestMapToList(t *testing.T) {
 		t.Errorf("expected site.json map[string]interface got %T", data)
 	}
 	list := mapToList(val)
-	var tests = []struct {
-		key   string
-		value string
-	}{
-		{"title", "Site Home"},
-		{"description", "Site description"},
-		{"url", "http://example.com"},
-	}
-	for i, tt := range tests {
-		kv := list[i]
-		if kv.Key != tt.key {
-			t.Errorf("expects %s got %s", tt.key, kv.Key)
-		}
-		if kv.Value != tt.value {
-			t.Errorf("expects %s got %s", tt.value, kv.Value)
+	for _, kv := range list {
+		if val[kv.Key] != kv.Value {
+			t.Errorf("expects %s got %s", val[kv.Key], kv.Value)
 		}
 	}
 }
@@ -144,8 +140,8 @@ func TestSort(t *testing.T) {
 		order string
 		want  []string
 	}{
-		{"name", "desc", []string{"News", "Home", "Contact", "About"}},
-		{"name", "asc", []string{"About", "Contact", "Home", "News"}},
+		{"name", "desc", []string{"Posts", "News", "Home", "Contact", "About"}},
+		{"name", "asc", []string{"About", "Contact", "Home", "News", "Posts"}},
 	}
 	data := sg.data("links.json")
 	for _, tt := range testJson {

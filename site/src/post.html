@@ -1,6 +1,5 @@
 ---
 template: main.html
-title: Post
 ---
 
 {{define "content"}}
@@ -15,4 +14,10 @@ title: Post
         {{index $post "by"}}: {{index $post "body"}}
     </div>
 </div>
+{{end}}
+
+{{define "title"}}
+{{ $posts := data "posts.json" }}
+{{ $post := index $posts .Path }}
+{{index $post "by"}}
 {{end}}

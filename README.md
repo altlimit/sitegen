@@ -62,11 +62,13 @@ Uses go html template.
 - js - no escape js
 - html - no escape html
 - css - no escape
-- sort "(Path|Local|Filename|Meta.\*)" "(asc|desc) - orders sources
-- limit n - limits sources
-- offset n - offsets sources
-- paginate n - paginate a list while providing page limit "n", "Page" and "Pages" is populated in current page
+- select - accepts json object that turns it into an array of {Key, Value} to allow sorting
+- sort "(Path|Local|Filename|Meta.\*|Key|Value.\*|\*)" "(asc|desc) - orders sources or array from data
+- limit n - limits sources or array from data
+- offset n - offsets sources or array from data
+- paginate n - paginate a sources or array from data while providing page limit "n", "Page" and "Pages" is populated in current page
 - pages Source - returns list of pages with Path, Page & Active properties for creating links
+- page "path" - creates a parametarized page, page will have .Path variable
 
 ## Page variables
 
@@ -76,3 +78,5 @@ All yaml meta data are in each page are available plus values below.
 - Source - current page source
 - BasePath - base path from provided base path param (defaults to /)
 - Today - current day YYYY-MM-DD at build time
+- Pages|Pages - populated when "paginate" is used
+- Path - populated when "page" is ued
