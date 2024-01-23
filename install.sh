@@ -48,6 +48,8 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
        MACHINE_TYPE=`uname -m`
        if [ ${MACHINE_TYPE} == 'x86_64' ]; then
           install_binary "https://github.com/altlimit/sitegen/releases/download/latest/darwin.tgz"
+       elif [ ${MACHINE_TYPE} == 'arm64' ]; then
+          install_binary "https://github.com/altlimit/sitegen/releases/download/latest/darwin-arm64.tgz"
        else
           echo "${MACHINE_TYPE} not supported. Try building from source.";
           exit 1;
