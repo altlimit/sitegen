@@ -5,9 +5,17 @@ on:
     branches:
       - "master"
 
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
 jobs:
   latest-release:
     name: "Latest Release"
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: "ubuntu-latest"
     steps:
       - name: Checkout code
@@ -17,6 +25,9 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+
+      - name: "Run tests"
+        run: go test ./...
 
       - name: "Build"
         run: ./build.sh
@@ -28,3 +39,15 @@ jobs:
           title: "Latest Build"
           files: |
             ./build/*
+
+      - name: Build site
+        run: |
+          go build
+          ./sitegen -clean -minify
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './public'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

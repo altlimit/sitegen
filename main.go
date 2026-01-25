@@ -10,12 +10,15 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/altlimit/sitegen/pkg/server"
 	"github.com/altlimit/sitegen/pkg/sitegen"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/fsnotify/fsnotify"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/css"
@@ -28,14 +31,153 @@ import (
 
 var (
 	cmdWG   sync.WaitGroup
-	version = "v0.0.12"
+	version = "v1.0.0"
+
+	// Styles
+	headerStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("205")).
+			Bold(true).
+			Padding(0, 1)
+
+	statusStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("241")).
+			PaddingLeft(1)
+
+	boxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("63")).
+			Padding(1, 2)
+
+	urlStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("86")).
+			Underline(true)
 )
 
 //go:embed site/*
 var siteFS embed.FS
 
+// Messages
+type buildMsg struct {
+	stats map[string]int
+	time  time.Time
+}
+type fileMsg struct {
+	path   string
+	action string
+}
+type statusMsg string
+
+type model struct {
+	sg          *sitegen.SiteGen
+	stats       map[string]int
+	status      string
+	serverURL   string
+	publicPath  string
+	srv         *server.StaticServer
+	buildAll    bool
+	tplDir      string
+	exclude     string
+	sourceDir   string
+	lastBuild   time.Time
+	recentFiles []string
+}
+
+func (m model) Init() tea.Cmd {
+	return nil
+}
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "ctrl+c" || msg.String() == "q" {
+			return m, tea.Quit
+		}
+	case buildMsg:
+		if len(msg.stats) > 0 {
+			m.stats = msg.stats
+		}
+		m.lastBuild = msg.time
+		m.status = "Build complete"
+	case fileMsg:
+		entry := fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), msg.path)
+		m.recentFiles = append(m.recentFiles, entry)
+		if len(m.recentFiles) > 10 {
+			m.recentFiles = m.recentFiles[1:]
+		}
+	case statusMsg:
+		m.status = string(msg)
+	}
+	return m, nil
+}
+
+func (m model) View() string {
+	s := strings.Builder{}
+
+	s.WriteString("\n" + headerStyle.Render(fmt.Sprintf("SiteGen %s", version)) + "\n\n")
+
+	var statsView, infoView, activityView string
+
+	if len(m.stats) > 0 {
+		// Sort keys
+		keys := make([]string, 0, len(m.stats))
+		for k := range m.stats {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		rows := []string{}
+		for _, k := range keys {
+			rows = append(rows, fmt.Sprintf("%-10s %d", k, m.stats[k]))
+		}
+
+		statsView = boxStyle.Render(
+			lipgloss.JoinVertical(lipgloss.Left,
+				headerStyle.Render("Build Stats"),
+				strings.Join(rows, "\n"),
+			),
+		)
+	}
+
+	if m.serverURL != "" {
+		infoContent := fmt.Sprintf("Serving %s\n\n%s",
+			lipgloss.NewStyle().Bold(true).Render(m.publicPath),
+			urlStyle.Render(m.serverURL),
+		)
+
+		if !m.lastBuild.IsZero() {
+			infoContent += fmt.Sprintf("\n\nLast Built: %s", m.lastBuild.Format("15:04:05"))
+		}
+
+		infoView = boxStyle.Render(
+			lipgloss.JoinVertical(lipgloss.Left,
+				headerStyle.Render("Server Info"),
+				infoContent,
+			),
+		)
+	}
+
+	if len(m.recentFiles) > 0 {
+		activityView = boxStyle.Render(
+			lipgloss.JoinVertical(lipgloss.Left,
+				headerStyle.Render("Recent Activity"),
+				strings.Join(m.recentFiles, "\n"),
+			),
+		)
+	}
+
+	// Horizontal layout
+	s.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, statsView, "  ", infoView, "  ", activityView) + "\n\n")
+
+	if m.status != "" {
+		s.WriteString(statusStyle.Render(m.status) + "\n")
+	}
+
+	s.WriteString(statusStyle.Render("\nPress q or Ctrl+C to quit"))
+
+	return s.String()
+}
+
 func main() {
-	log.Println("sitegen ", version)
 	var (
 		sitePath   string
 		publicPath string
@@ -107,191 +249,256 @@ func main() {
 		basePath = "/" + strings.Trim(basePath, "/") + "/"
 	}
 	sg = sitegen.NewSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath, min, clean, serve)
-	sg.BuildAll(false)
 
-	if sg.Dev {
-		ss = server.NewStaticServer(pubPath, basePath)
-		watcher, err := fsnotify.NewWatcher()
-		var mu sync.Mutex
-		events := make(map[string]bool)
+	// Single run
+	if !serve {
+		fmt.Println(headerStyle.Render(fmt.Sprintf("SiteGen %s", version)))
+		stats, err := sg.BuildAll(false)
 		if err != nil {
-			log.Fatalln("Watcher error", err)
+			log.Fatalf("Build failed: %v", err)
 		}
-		defer watcher.Close()
+		renderStats(stats)
+		return
+	}
 
-		processKey := func(key string) {
-			action := key[:3]
-			path := key[4:]
-			pp, err := filepath.Abs(path)
-			if err != nil {
-				log.Println("Failed to get absolute path ", path, " error ", err)
-			}
-			time.Sleep(time.Millisecond * 500)
-			fi, err := os.Stat(pp)
-			if err != nil {
-				log.Println("Stat error ", err)
-			}
-			if err == nil && fi.IsDir() {
-				if action == "add" {
-					if !excluded(exclude, strings.Replace(pp, sg.SitePath+string(os.PathSeparator), "", 1)) {
-						if err := watcher.Add(pp); err != nil {
-							log.Println("Watch dir ", pp, " error ", err)
-						}
-					}
-				} else {
-					if err := watcher.Remove(pp); err != nil {
-						log.Println("Watch stop dir ", pp, " error ", err)
+	// Serve mode
+	ss = server.NewStaticServer(pubPath, basePath)
+	serverURL := fmt.Sprintf("http://localhost:%s%s", port, basePath)
+
+	m := model{
+		sg:         sg,
+		serverURL:  serverURL,
+		publicPath: publicPath,
+		srv:        ss,
+		buildAll:   buildAll,
+		tplDir:     tplDir,
+		exclude:    exclude,
+		sourceDir:  sourceDir,
+	}
+
+	p := tea.NewProgram(m, tea.WithAltScreen())
+
+	// Build initial
+	go func() {
+		stats, err := sg.BuildAll(false)
+		if err != nil {
+			p.Send(statusMsg(fmt.Sprintf("Build failed: %v", err)))
+		} else {
+			p.Send(buildMsg{stats: stats, time: time.Now()})
+		}
+	}()
+
+	// Start watcher routine
+	go runWatcher(p, sg, ss, exclude, sourceDir, tplDir, buildAll)
+
+	// Start server
+	go func() {
+		http.Handle("/", ss)
+		http.ListenAndServe(fmt.Sprintf(":%s", port), nil)
+	}()
+
+	if _, err := p.Run(); err != nil {
+		fmt.Printf("Alas, there's been an error: %v", err)
+		os.Exit(1)
+	}
+}
+
+func runWatcher(p *tea.Program, sg *sitegen.SiteGen, ss *server.StaticServer, exclude, sourceDir, tplDir string, buildAll bool) {
+	watcher, err := fsnotify.NewWatcher()
+	var mu sync.Mutex
+	events := make(map[string]bool)
+	if err != nil {
+		log.Fatalln("Watcher error", err)
+	}
+	defer watcher.Close()
+
+	processKey := func(key string) {
+		action := key[:3]
+		path := key[4:]
+		pp, err := filepath.Abs(path)
+		if err != nil {
+			p.Send(statusMsg(fmt.Sprintf("Failed to get absolute path %s error %v", path, err)))
+		}
+		time.Sleep(time.Millisecond * 500)
+		fi, err := os.Stat(pp)
+		if err != nil {
+			// ignore stat errors (file deleted)
+		}
+
+		stats := map[string]int{}
+
+		if err == nil && fi.IsDir() {
+			if action == "add" {
+				if !excluded(exclude, strings.Replace(pp, sg.SitePath+string(os.PathSeparator), "", 1)) {
+					if err := watcher.Add(pp); err != nil {
+						p.Send(statusMsg(fmt.Sprintf("Watch dir %s error %v", pp, err)))
 					}
 				}
 			} else {
-				rp := strings.Replace(pp, sg.SitePath, "", 1)
-				isSrc := strings.HasPrefix(rp, string(os.PathSeparator)+sourceDir)
-				switch action {
-				case "add":
-					if isSrc {
-						// We need to access sources internally or via a method?
-						// In existing code sources was public but unexported.
-						// We should probably expose Build method which takes path.
-						// NewSource is available.
-						// Logic here was:
-						/*
-							if s, ok := sg.sources[pp]; ok {
-								s.reloadContent()
-							} else {
-								if _, err := sg.newSource(pp, false); err != nil {
-									log.Println(path, " failed source ", err)
-								}
-							}
-						*/
-						// We need a way to check if source exists or just call Build which deals not found probably not.
-						// Actually sg.Build() checks if it exists.
-						// But for reloading content we need access.
-						// Let's rely on Build to do the right thing or expose Reload.
-
-						// Refactor decision: expose Rebuild(path string) error on SiteGen which handles logic?
-						// Or just expose sources. But sources is map.
-						// Let's try to just rebuild.
-
-						// Wait, sg.sources is unexported in new package.
-						// We need a method to reload source.
-						// Let's add ReloadSource(path) in SiteGen?
-						// For now, let's just re-implement logic using available methods if possible.
-						// We can't access sources directly.
-
-						// Actually I missed adding a ReloadSource or similar method to SiteGen.
-						// Let's assume for now I will fix SiteGen to support this flow, or use NewSource(path, false) which updates the map if not gen.
-
-						// "_, err := sg.NewSource(pp, false)" will update/add source.
-						if _, err := sg.NewSource(pp, false); err != nil {
-							log.Println(path, " failed source ", err)
-						}
-
-						if err := sg.Build(pp); err != nil {
-							log.Println("Build failed ", pp, " error ", err)
-						} else {
-							log.Println("Rebuilt: ", rp)
-						}
-
-						if buildAll {
-							sg.BuildAll(true)
-						}
-					} else {
-						if strings.HasPrefix(rp, string(os.PathSeparator)+tplDir) {
-							sg.ClearCache()
-						}
-						sg.BuildAll(true)
-					}
-				case "del":
-					if isSrc {
-						if err := sg.Remove(pp); err != nil {
-							log.Println("Remove failed ", pp, " error ", err)
-						} else {
-							log.Println("Deleted: ", rp)
-						}
-						if buildAll {
-							sg.BuildAll(true)
-						}
-					} else {
-						if strings.HasPrefix(rp, string(os.PathSeparator)+tplDir) {
-							sg.ClearCache()
-						}
-						sg.BuildAll(true)
-					}
+				if err := watcher.Remove(pp); err != nil {
+					p.Send(statusMsg(fmt.Sprintf("Watch stop dir %s error %v", pp, err)))
 				}
 			}
-			mu.Lock()
-			delete(events, key)
-			mu.Unlock()
-			cmdWG.Wait()
-			ss.Notifier <- []byte("updated")
-		}
+		} else {
+			rp := strings.Replace(pp, sg.SitePath, "", 1)
+			isSrc := strings.HasPrefix(rp, string(os.PathSeparator)+sourceDir)
+			switch action {
+			case "add":
+				if isSrc {
+					p.Send(fileMsg{path: rp, action: "add"})
+					if _, err := sg.NewSource(pp, false); err != nil {
+						p.Send(statusMsg(fmt.Sprintf("%s failed source %v", path, err)))
+					}
 
-		go func() {
-			for {
-				select {
-				case event, ok := <-watcher.Events:
-					if !ok {
-						return
+					if err := sg.Build(pp); err != nil {
+						p.Send(statusMsg(fmt.Sprintf("Build failed %s error %v", pp, err)))
+					} else {
+						// handled by fileMsg
 					}
-					var op string
-					if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
-						op = "del"
-					} else if event.Op&fsnotify.Create == fsnotify.Create || event.Op&fsnotify.Write == fsnotify.Write {
-						op = "add"
-					}
-					if op != "" {
-						if n := strings.Split(event.Name, string(os.PathSeparator)); strings.HasPrefix(n[len(n)-1], ".") {
-							return
-						}
-						b := false
-						mu.Lock()
-						key := op + ":" + event.Name
-						if _, ok := events[key]; !ok {
-							events[key] = true
-							b = true
-						}
-						mu.Unlock()
-						if b {
-							go processKey(key)
-						}
-					}
-				case err, ok := <-watcher.Errors:
-					if !ok {
-						return
-					}
-					log.Println("error:", err)
-				}
-			}
-		}()
 
-		if err = watcher.Add(sg.SitePath); err != nil {
-			log.Fatalln("Watch dir ", tplDir, " error ", err)
-		}
-
-		filepath.Walk(sg.SitePath,
-			func(path string, info os.FileInfo, err error) error {
-				if err != nil {
-					log.Fatal("watch dir", path, "error", err)
-				}
-				if info.IsDir() && !strings.HasPrefix(path, sg.PublicPath) {
-					if !excluded(exclude, strings.Replace(path, sg.SitePath+string(os.PathSeparator), "", 1)) {
-						err = watcher.Add(path)
+					if buildAll {
+						s, err := sg.BuildAll(true)
 						if err != nil {
-							log.Fatal("watch dir", path, "error", err)
+							p.Send(statusMsg(fmt.Sprintf("BuildAll failed %v", err)))
+						} else {
+							stats = s
 						}
-						return nil
+					}
+				} else {
+					if strings.HasPrefix(rp, string(os.PathSeparator)+tplDir) {
+						sg.ClearCache()
+					}
+					s, err := sg.BuildAll(true)
+					if err != nil {
+						p.Send(statusMsg(fmt.Sprintf("BuildAll failed %v", err)))
+					} else {
+						stats = s
 					}
 				}
-				return nil
-			})
+			case "del":
+				if isSrc {
+					if err := sg.Remove(pp); err != nil {
+						p.Send(statusMsg(fmt.Sprintf("Remove failed %s error %v", pp, err)))
+					} else {
+						p.Send(fileMsg{path: rp, action: "del"})
+					}
+					if buildAll {
+						s, err := sg.BuildAll(true)
+						if err != nil {
+							p.Send(statusMsg(fmt.Sprintf("BuildAll failed %v", err)))
+						} else {
+							stats = s
+						}
+					}
+				} else {
+					if strings.HasPrefix(rp, string(os.PathSeparator)+tplDir) {
+						sg.ClearCache()
+					}
+					s, err := sg.BuildAll(true)
+					if err != nil {
+						p.Send(statusMsg(fmt.Sprintf("BuildAll failed %v", err)))
+					} else {
+						stats = s
+					}
+				}
+			}
+		}
+		mu.Lock()
+		delete(events, key)
+		mu.Unlock()
+		cmdWG.Wait()
+		ss.Notifier <- []byte("updated")
 
-		log.Println("Serving: ", publicPath, " at ", fmt.Sprintf("http://localhost:%s%s", port, basePath))
-		log.Println("Press Ctrl+C to stop")
-		http.Handle("/", ss)
-		log.Println(http.ListenAndServe(fmt.Sprintf(":%s", port), nil))
+		// Send build message to update timestamp, even if stats are empty
+		p.Send(buildMsg{stats: stats, time: time.Now()})
 	}
 
-	cmdWG.Wait()
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				var op string
+				if event.Op&fsnotify.Remove == fsnotify.Remove || event.Op&fsnotify.Rename == fsnotify.Rename {
+					op = "del"
+				} else if event.Op&fsnotify.Create == fsnotify.Create || event.Op&fsnotify.Write == fsnotify.Write {
+					op = "add"
+				}
+				if op != "" {
+					if n := strings.Split(event.Name, string(os.PathSeparator)); strings.HasPrefix(n[len(n)-1], ".") {
+						return
+					}
+					b := false
+					mu.Lock()
+					key := op + ":" + event.Name
+					if _, ok := events[key]; !ok {
+						events[key] = true
+						b = true
+					}
+					mu.Unlock()
+					if b {
+						go processKey(key)
+					}
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Println("error:", err)
+			}
+		}
+	}()
+
+	if err = watcher.Add(sg.SitePath); err != nil {
+		log.Fatalln("Watch dir ", tplDir, " error ", err)
+	}
+
+	filepath.Walk(sg.SitePath,
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				log.Fatal("watch dir", path, "error", err)
+			}
+			if info.IsDir() && !strings.HasPrefix(path, sg.PublicPath) {
+				if !excluded(exclude, strings.Replace(path, sg.SitePath+string(os.PathSeparator), "", 1)) {
+					err = watcher.Add(path)
+					if err != nil {
+						log.Fatal("watch dir", path, "error", err)
+					}
+					return nil
+				}
+			}
+			return nil
+		})
+
+	// block forever
+	select {}
+}
+
+func renderStats(stats map[string]int) {
+	if len(stats) == 0 {
+		return
+	}
+
+	// Sort keys
+	keys := make([]string, 0, len(stats))
+	for k := range stats {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	rows := []string{}
+	for _, k := range keys {
+		rows = append(rows, fmt.Sprintf("%-10s %d", k, stats[k]))
+	}
+
+	fmt.Println(boxStyle.Render(
+		lipgloss.JoinVertical(lipgloss.Left,
+			headerStyle.Render("Build Stats"),
+			strings.Join(rows, "\n"),
+		),
+	))
 }
 
 func excluded(pattern, path string) bool {

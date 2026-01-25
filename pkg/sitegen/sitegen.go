@@ -448,11 +448,11 @@ func (sg *SiteGen) Build(path string) error {
 	return nil
 }
 
-func (sg *SiteGen) BuildAll(reload bool) {
+func (sg *SiteGen) BuildAll(reload bool) (map[string]int, error) {
 	out := make(map[string]int)
 	if sg.Clean {
 		if err := os.RemoveAll(sg.PublicPath); err != nil {
-			log.Fatalln("Failed to clean ", sg.PublicPath, " error ", err)
+			return nil, fmt.Errorf("failed to clean public path %s: %w", sg.PublicPath, err)
 		}
 	}
 	sg.genSources = nil
@@ -465,10 +465,7 @@ func (sg *SiteGen) BuildAll(reload bool) {
 			log.Println("Build ", k, " error ", err)
 		}
 	}
-	log.Println("Generated:")
-	for k, v := range out {
-		log.Println(k, ":", v)
-	}
+	return out, nil
 }
 
 func (sg *SiteGen) ClearCache() {
