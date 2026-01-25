@@ -87,7 +87,12 @@ func NewSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath string, 
 	}
 
 	// load all sources keyed by local path
-	filepath.Walk(filepath.Join(sg.SitePath, sg.SourceDir),
+	srcPath := filepath.Join(sg.SitePath, sg.SourceDir)
+	if _, err := os.Stat(srcPath); os.IsNotExist(err) {
+		log.Fatalln("Source directory does not exist: ", srcPath)
+	}
+
+	filepath.Walk(srcPath,
 		func(path string, info os.FileInfo, err error) error {
 			if info == nil || info.IsDir() {
 				return nil
