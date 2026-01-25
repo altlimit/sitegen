@@ -1,0 +1,32 @@
+---
+title: Blog
+template: main.html
+---
+
+{{define "content"}}
+<h1>Blog</h1>
+<p>Example of pagination (2 posts per page).</p>
+
+{{ $posts := sort "Meta.date" "desc" (sources "RelPath" "blog/*.html") }}
+
+{{ $paginated := paginate 2 $posts }}
+
+<div class="grid">
+    {{ range $paginated }}
+    <div class="card">
+        <h3><a href="{{.Path}}">{{.Meta.title}}</a></h3>
+        <p class="text-sm" style="opacity: 0.7">{{.Meta.date}}</p>
+        <p>{{.Meta.summary}}</p>
+    </div>
+    {{ end }}
+</div>
+
+{{ if gt .Source.TotalPages 1 }}
+<div class="pagination">
+    {{ range pages .Source }}
+    <a href="{{.Path}}" class="{{if .Active}}active{{end}}">{{.Page}}</a>
+    {{ end }}
+</div>
+{{ end }}
+
+{{end}}

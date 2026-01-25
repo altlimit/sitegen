@@ -1,0 +1,46 @@
+---
+title: Features
+template: main.html
+---
+
+{{define "content"}}
+<div class="hero">
+    <h1>Advanced Features</h1>
+    <p>See what SiteGen can do with data and logic.</p>
+</div>
+
+<h2>Data Sorting & Limiting</h2>
+<p>Here we load `data/links.json`, sort it by name descending, and limit to 3 items.</p>
+
+<div class="card">
+    <code>range sort "name" "desc" (limit 3 (data "links.json"))</code>
+    <ul>
+        {{ range sort "name" "desc" (limit 3 (data "links.json")) }}
+        <li>{{.name}} - {{.path}}</li>
+        {{ end }}
+    </ul>
+</div>
+
+<h2>File Sources</h2>
+<p>Dynamically listing files from `src/img` using `sources`.</p>
+<div class="grid">
+    {{ range sources "Path" "img/*" }}
+    <div class="card">
+        <h3>{{.Name}}</h3>
+        <p>Path: {{.Path}}</p>
+    </div>
+    {{ end }}
+</div>
+
+<h2>File Handlers</h2>
+<p>Check `src/css/styles.css` frontmatter to see how we handle file-specific build commands.</p>
+<pre style="background: var(--secondary-bg); padding: 1rem; border-radius: 0.5rem; overflow-x: auto;">
+/*
+---
+serve: echo "Serving CSS..."
+build: echo "Building CSS..."
+---
+*/
+</pre>
+
+{{end}}

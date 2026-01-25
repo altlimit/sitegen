@@ -1,0 +1,11 @@
+---
+template: main.html
+---
+{{define "content"}}
+<h1>Debug Sources</h1>
+<ul>
+    {{ range sources "Path" "*" }}
+    <li>Path: '{{.Path}}' | Name: '{{.Name}}' | Local: '{{.Local}}'</li>
+    {{ end }}
+</ul>
+{{end}}

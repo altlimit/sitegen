@@ -16,13 +16,13 @@ type Source struct {
 	Path  string
 	Meta  map[string]interface{}
 
-	Ext     string
-	Ctype   string
-	content []byte
-	sg      *SiteGen
-	page    int
-	pages   int
-	path    string
+	Ext         string
+	Ctype       string
+	content     []byte
+	sg          *SiteGen
+	CurrentPage int
+	TotalPages  int
+	path        string
 }
 
 func (s *Source) ReloadContent() []byte {
@@ -32,8 +32,8 @@ func (s *Source) ReloadContent() []byte {
 
 func (s *Source) LoadContent() []byte {
 	if s.content == nil {
-		s.page = 0
-		s.pages = 0
+		s.CurrentPage = 0
+		s.TotalPages = 0
 		var (
 			meta    []byte
 			content []byte
@@ -75,6 +75,14 @@ func (s *Source) Value(prop string) string {
 		val = s.Local
 	case "Filename":
 		val = filepath.Base(s.Local)
+	case "RelPath":
+		// Get path relative to source directory
+		rp, err := filepath.Rel(filepath.Join(s.sg.SitePath, s.sg.SourceDir), s.Local)
+		if err == nil {
+			val = strings.ReplaceAll(rp, "\\", "/")
+		}
+	case "Ext":
+		val = s.Ext
 	default:
 		if strings.HasPrefix(prop, "Meta.") {
 			val = fmt.Sprint(s.Meta[prop[5:]])

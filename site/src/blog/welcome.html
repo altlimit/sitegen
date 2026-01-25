@@ -1,0 +1,17 @@
+---
+title: Welcome to SiteGen
+date: 2026-01-01
+summary: The start of something new.
+template: main.html
+---
+
+{{define "content"}}
+<h1>{{.Meta.title}}</h1>
+<p style="opacity: 0.7">Published on {{.Meta.date}}</p>
+<hr style="margin: 1rem 0; border: 0; border-top: 1px solid var(--border-color);">
+
+<p>This is the first post in our modernized example site.</p>
+<p>We are using pure CSS variables for theming and standard HTML5 semantic elements.</p>
+
+<a href="/blog">← Back to Blog</a>
+{{end}}

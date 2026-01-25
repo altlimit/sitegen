@@ -19,11 +19,11 @@ func TestGetSources(t *testing.T) {
 		want    int
 	}{
 		{"/img/promo.svg", "Path", 1},
-		{"/news/*", "Path", 5},
-		{"**about.html", "Filename", 1},
+		{"/blog/*", "Path", 3},
+		{"**index.html", "Filename", 1},
 		{"index.html", "Filename", 1},
 		{"Homepage", "Meta.title", 0},
-		{"About Us", "Meta.title", 1},
+		{"Welcome to SiteGen", "Meta.title", 1},
 	}
 
 	for _, tt := range tests {
@@ -110,14 +110,18 @@ func TestMapToList(t *testing.T) {
 
 func TestSort(t *testing.T) {
 	sg := testSiteGen()
-	sources := sg.GetSources("Path", "/news/*")
+	bg := sg.GetSources("Path", "/blog/*")
+	// default sort is not guaranteed, assume we sort by date in test
+	// Actually GetSources returns sources in map iteration order which is random.
+	// But sortBy will sort them.
+	sources := bg
 	var tests = []struct {
 		by    string
 		order string
 		want  []string
 	}{
-		{"Meta.date", "desc", []string{"2020-01-05", "2020-01-04", "2020-01-03", "2020-01-02", "2020-01-01"}},
-		{"Meta.date", "asc", []string{"2020-01-01", "2020-01-02", "2020-01-03", "2020-01-04", "2020-01-05"}},
+		{"Meta.date", "desc", []string{"2026-01-03", "2026-01-02", "2026-01-01"}},
+		{"Meta.date", "asc", []string{"2026-01-01", "2026-01-02", "2026-01-03"}},
 	}
 
 	for _, tt := range tests {
@@ -140,8 +144,8 @@ func TestSort(t *testing.T) {
 		order string
 		want  []string
 	}{
-		{"name", "desc", []string{"Posts", "News", "Home", "Contact", "About"}},
-		{"name", "asc", []string{"About", "Contact", "Home", "News", "Posts"}},
+		{"name", "desc", []string{"Home", "Features", "Blog"}},
+		{"name", "asc", []string{"Blog", "Features", "Home"}},
 	}
 	data := sg.Data("links.json")
 	// links.json is array of objects
@@ -239,12 +243,11 @@ func TestLocalToPath(t *testing.T) {
 		want   string
 	}{
 		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "index.html")], "/"},
-		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "css", "styles.css")], "/css/styles.css"},
 		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "img", "promo.svg")], "/img/promo.svg"},
-		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "404.html")], "/404.html"},
-		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "news.html")], "/news"},
-		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "contact.html")], "/contact"},
-		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "news", "2020-01-01.html")], "/news/2020-01-01"},
+		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "blog.html")], "/blog"},
+		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "blog", "css.html")], "/blog/css"},
+		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "blog", "incremental.html")], "/blog/incremental"},
+		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "blog", "welcome.html")], "/blog/welcome"},
 	}
 
 	for _, tt := range tests {

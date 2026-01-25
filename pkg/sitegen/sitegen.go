@@ -195,21 +195,21 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 		if rv.Kind() != reflect.Slice {
 			log.Println("paginate must be of type Slice got " + rv.Type().String())
 		}
-		if s.page == 0 {
-			s.pages = int(math.Ceil(float64(rv.Len()) / float64(limit)))
-			s.page = 1
-			if s.pages > 1 {
-				for i := 2; i <= s.pages; i++ {
+		if s.CurrentPage == 0 {
+			s.TotalPages = int(math.Ceil(float64(rv.Len()) / float64(limit)))
+			s.CurrentPage = 1
+			if s.TotalPages > 1 {
+				for i := 2; i <= s.TotalPages; i++ {
 					sp := *s
 					p := strconv.Itoa(i)
 					sp.Path += "/" + p
 					sp.Name = p + sp.Ext
-					sp.page = i
+					sp.CurrentPage = i
 					sp.sg.genSources = append(sp.sg.genSources, &sp)
 				}
 			}
 		}
-		start := s.page - 1
+		start := s.CurrentPage - 1
 		start = start * limit
 		end := start + limit
 		if end > rv.Len() {
@@ -279,8 +279,8 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 		data[k] = v
 	}
 	data["Path"] = s.path
-	data["Page"] = s.page
-	data["Pages"] = s.pages
+	data["Page"] = s.CurrentPage
+	data["Pages"] = s.TotalPages
 	data["Dev"] = sg.Dev
 	data["Source"] = s
 	data["BasePath"] = sg.BasePath
@@ -694,12 +694,12 @@ func offset(offset int, list interface{}) interface{} {
 }
 
 func pages(s *Source) (pages []Page) {
-	if s.pages > 1 {
-		for i := 1; i <= s.pages; i++ {
+	if s.TotalPages > 1 {
+		for i := 1; i <= s.TotalPages; i++ {
 			p := Page{
 				Path:   s.Path,
 				Page:   i,
-				Active: i == s.page,
+				Active: i == s.CurrentPage,
 			}
 			if i > 1 {
 				p.Path += "/" + strconv.Itoa(i)

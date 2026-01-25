@@ -1,0 +1,16 @@
+---
+title: Pure CSS Design
+date: 2026-01-03
+summary: Catching up with modern web standards.
+template: main.html
+---
+
+{{define "content"}}
+<h1>{{.Meta.title}}</h1>
+<p style="opacity: 0.7">Published on {{.Meta.date}}</p>
+<hr style="margin: 1rem 0; border: 0; border-top: 1px solid var(--border-color);">
+
+<p>No frameworks usage here. Just CSS variables, Grid, and Flexbox.</p>
+
+<a href="/blog">← Back to Blog</a>
+{{end}}

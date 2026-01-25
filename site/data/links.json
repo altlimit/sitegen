@@ -1,21 +1,14 @@
-[{
-        "path": "/",
-        "name": "Home"
+[
+    {
+        "name": "Home",
+        "path": "/"
     },
     {
-        "path": "/about",
-        "name": "About"
+        "name": "Features",
+        "path": "/features"
     },
     {
-        "path": "/news",
-        "name": "News"
-    },
-    {
-        "path": "/posts",
-        "name": "Posts"
-    },
-    {
-        "path": "/contact",
-        "name": "Contact"
+        "name": "Blog",
+        "path": "/blog"
     }
 ]
