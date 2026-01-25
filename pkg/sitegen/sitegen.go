@@ -1,4 +1,4 @@
-package main
+package sitegen
 
 import (
 	"bytes"
@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"html/template"
 	"io"
-	"io/ioutil"
 	"log"
 	"math"
 	"mime"
@@ -23,7 +22,6 @@ import (
 
 	"github.com/gobwas/glob"
 	"github.com/tdewolff/minify/v2"
-	"gopkg.in/yaml.v2"
 )
 
 var (
@@ -41,32 +39,19 @@ var (
 type (
 	// SiteGen is an instance of generator
 	SiteGen struct {
-		sitePath    string
-		templateDir string
-		dataDir     string
-		publicPath  string
-		basePath    string
-		sourceDir   string
-		minify      *minify.M
-		clean       bool
-		sources     map[string]*Source
-		genSources  []*Source
-		dev         bool
-	}
-	// Source is a resource
-	Source struct {
-		Name  string
-		Local string
-		Path  string
-		Meta  map[string]interface{}
+		SitePath    string
+		TemplateDir string
+		DataDir     string
+		PublicPath  string
+		BasePath    string
+		SourceDir   string
+		Minify      *minify.M
+		Clean       bool
+		Dev         bool
 
-		ext     string
-		ctype   string
-		content []byte
-		sg      *SiteGen
-		page    int
-		pages   int
-		path    string
+		sources    map[string]*Source
+		genSources []*Source
+		TplCache   map[string]*texttemplate.Template
 	}
 
 	Parser func(*Source) []byte
@@ -82,26 +67,27 @@ type (
 	}
 )
 
-func newSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath string, min *minify.M, clean bool, dev bool) *SiteGen {
+func NewSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath string, min *minify.M, clean bool, dev bool) *SiteGen {
 	sp, err := filepath.Abs(sitePath)
 	if err != nil {
 		log.Fatalln("Site Path ", sitePath, " error ", err)
 	}
 	sg := &SiteGen{
-		sitePath:    sp,
-		sourceDir:   sourceDir,
-		templateDir: tplDir,
-		dataDir:     dataDir,
-		publicPath:  pubPath,
-		basePath:    basePath,
-		minify:      min,
-		clean:       clean,
+		SitePath:    sp,
+		SourceDir:   sourceDir,
+		TemplateDir: tplDir,
+		DataDir:     dataDir,
+		PublicPath:  pubPath,
+		BasePath:    basePath,
+		Minify:      min,
+		Clean:       clean,
 		sources:     make(map[string]*Source),
-		dev:         dev,
+		TplCache:    make(map[string]*texttemplate.Template),
+		Dev:         dev,
 	}
 
 	// load all sources keyed by local path
-	filepath.Walk(filepath.Join(sg.sitePath, sg.sourceDir),
+	filepath.Walk(filepath.Join(sg.SitePath, sg.SourceDir),
 		func(path string, info os.FileInfo, err error) error {
 			if info == nil || info.IsDir() {
 				return nil
@@ -113,7 +99,7 @@ func newSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath string, 
 				log.Println(path, " error ", err)
 				return nil
 			}
-			_, err = sg.newSource(path, false)
+			_, err = sg.NewSource(path, false)
 			if err != nil {
 				log.Println(path, " failed source ", err)
 				return nil
@@ -124,28 +110,28 @@ func newSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath string, 
 	return sg
 }
 
-func (sg *SiteGen) newSource(path string, gen bool) (*Source, error) {
+func (sg *SiteGen) NewSource(path string, gen bool) (*Source, error) {
 	s := &Source{
 		Name: filepath.Base(path),
-		ext:  fileExt(path),
+		Ext:  fileExt(path),
 	}
 	p, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
 	}
 	s.Local = p
-	if ctype := mime.TypeByExtension(s.ext); ctype != "" {
-		s.ctype = strings.Split(ctype, ";")[0]
+	if ctype := mime.TypeByExtension(s.Ext); ctype != "" {
+		s.Ctype = strings.Split(ctype, ";")[0]
 	}
 	s.sg = sg
-	s.loadContent()
+	s.LoadContent()
 	if !gen {
 		sg.sources[path] = s
 	}
 	return s, nil
 }
 
-func (sg *SiteGen) sourceList() []*Source {
+func (sg *SiteGen) SourceList() []*Source {
 	var sources []*Source
 	for _, s := range sg.sources {
 		sources = append(sources, s)
@@ -158,9 +144,9 @@ func (sg *SiteGen) tplFuncs() map[string]interface{} {
 		"sort":     sortBy,
 		"limit":    limit,
 		"offset":   offset,
-		"path":     sg.path,
-		"sources":  sg.getSources,
-		"data":     sg.data,
+		"path":     sg.Path,
+		"sources":  sg.GetSources,
+		"data":     sg.Data,
 		"json":     parseJSON,
 		"js":       allowJS,
 		"html":     allowHTML,
@@ -173,7 +159,7 @@ func (sg *SiteGen) tplFuncs() map[string]interface{} {
 }
 
 func (sg SiteGen) parse(s *Source, t string) []byte {
-	content := s.loadContent()
+	content := s.LoadContent()
 	if content == nil {
 		return nil
 	}
@@ -193,12 +179,12 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 		}
 		if sp == nil {
 			var err error
-			sp, err = sg.newSource(filepath.Join(sg.sitePath, sg.sourceDir, source), true)
+			sp, err = sg.NewSource(filepath.Join(sg.SitePath, sg.SourceDir, source), true)
 			if err != nil {
 				log.Println("page source error", err)
 			}
 			sp.Path += "/" + path
-			sp.Name = path + sp.ext
+			sp.Name = path + sp.Ext
 			sp.path = path
 			s.sg.genSources = append(s.sg.genSources, sp)
 		}
@@ -217,7 +203,7 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 					sp := *s
 					p := strconv.Itoa(i)
 					sp.Path += "/" + p
-					sp.Name = p + sp.ext
+					sp.Name = p + sp.Ext
 					sp.page = i
 					sp.sg.genSources = append(sp.sg.genSources, &sp)
 				}
@@ -232,21 +218,48 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 		return rv.Slice(start, end).Interface()
 	}
 
-	tpl := texttemplate.New(tplName)
-	tpl = tpl.Funcs(funcs)
+	var tpl *texttemplate.Template
+	var err error
 
-	tplFiles, err := filepath.Glob(filepath.Join(sg.sitePath, sg.templateDir, "*."+t))
-	if err != nil {
-		log.Println("Load template ", s.Local, " error ", err)
-		return nil
-	}
-	if len(tplFiles) > 0 {
-		tpl, err = tpl.ParseFiles(tplFiles...)
+	// Try to get from cache
+	if cached, ok := sg.TplCache[t]; ok {
+		tpl, err = cached.Clone()
 		if err != nil {
-			log.Println("Parse template ", s.Local, " error ", err)
+			log.Println("Template clone error", err)
 			return nil
 		}
+		tpl.Funcs(funcs)
+	} else {
+		// Lazily load cache for this type
+		if err := sg.LoadTemplate(t); err == nil {
+			if cached, ok := sg.TplCache[t]; ok {
+				tpl, err = cached.Clone()
+				if err == nil {
+					tpl.Funcs(funcs)
+				}
+			}
+		} else {
+			log.Println("LoadTemplate error", err)
+		}
 	}
+
+	// Fallback to fresh parse if cache failed or not available (shouldn't happen if LoadTemplate works)
+	if tpl == nil {
+		tpl = texttemplate.New(tplName).Funcs(funcs)
+		tplFiles, err := filepath.Glob(filepath.Join(sg.SitePath, sg.TemplateDir, "*."+t))
+		if err != nil {
+			log.Println("Load template ", s.Local, " error ", err)
+			return nil
+		}
+		if len(tplFiles) > 0 {
+			tpl, err = tpl.ParseFiles(tplFiles...)
+			if err != nil {
+				log.Println("Parse template ", s.Local, " error ", err)
+				return nil
+			}
+		}
+	}
+
 	tpl, err = tpl.Parse(string(content))
 	if err != nil {
 		log.Println("Parse ", s.Local, " error ", err)
@@ -260,9 +273,9 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 	data["Path"] = s.path
 	data["Page"] = s.page
 	data["Pages"] = s.pages
-	data["Dev"] = sg.dev
+	data["Dev"] = sg.Dev
 	data["Source"] = s
-	data["BasePath"] = sg.basePath
+	data["BasePath"] = sg.BasePath
 	data["Today"] = time.Now().Format("2006-01-02")
 
 	tplBuf := new(bytes.Buffer)
@@ -272,8 +285,8 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 	}
 	if t == "html" {
 		body := tplBuf.Bytes()
-		if sg.minify != nil {
-			b, err := sg.minify.Bytes("text/html", body)
+		if sg.Minify != nil {
+			b, err := sg.Minify.Bytes("text/html", body)
 			if err != nil {
 				log.Println("Minify ", s.Local, " error ", err)
 			} else {
@@ -294,20 +307,20 @@ func (sg *SiteGen) html(s *Source) []byte {
 }
 
 func (sg *SiteGen) sourcePath(s *Source) string {
-	switch s.ext {
+	switch s.Ext {
 	case ".html", ".htm":
-		sDir := filepath.Join(sg.publicPath, s.Path)
+		sDir := filepath.Join(sg.PublicPath, s.Path)
 		fName := "index.html"
 		if strings.HasSuffix(s.Path, ".html") || strings.HasSuffix(s.Path, ".htm") {
 			sDir, fName = filepath.Split(sDir)
 		}
 		return filepath.Join(sDir, fName)
 	default:
-		return filepath.Join(sg.publicPath, s.Path)
+		return filepath.Join(sg.PublicPath, s.Path)
 	}
 }
 
-func (sg *SiteGen) remove(path string) error {
+func (sg *SiteGen) Remove(path string) error {
 	s, ok := sg.sources[path]
 	if !ok {
 		return nil
@@ -331,14 +344,14 @@ func (sg *SiteGen) remove(path string) error {
 	return nil
 }
 
-func (sg *SiteGen) build(path string) error {
+func (sg *SiteGen) Build(path string) error {
 	s, ok := sg.sources[path]
 	if !ok {
 		return fmt.Errorf("build failed for %s: not found", path)
 	}
 
 	pubPath := sg.sourcePath(s)
-	src := s.loadContent()
+	src := s.LoadContent()
 
 	// check if parametarized page then skip if no parameter
 	if strings.Contains(string(src), " .Path") && s.path == "" {
@@ -355,7 +368,7 @@ func (sg *SiteGen) build(path string) error {
 			parser = sg.html
 		}
 	} else {
-		switch s.ext {
+		switch s.Ext {
 		case ".txt":
 			parser = sg.text
 		case ".html", ".htm":
@@ -401,15 +414,15 @@ func (sg *SiteGen) build(path string) error {
 		}
 	} else {
 		if src != nil {
-			if serve, ok := s.Meta["serve"]; sg.dev && ok {
+			if serve, ok := s.Meta["serve"]; sg.Dev && ok {
 				runCommand(fmt.Sprint(serve))
 				return nil
-			} else if build, ok := s.Meta["build"]; !sg.dev && ok {
+			} else if build, ok := s.Meta["build"]; !sg.Dev && ok {
 				runCommand(fmt.Sprint(build))
 				return nil
-			} else if sg.minify != nil && (s.ext == ".js" || s.ext == ".css") {
-				if _, ok := parseCtype[s.ctype]; ok {
-					b, err := sg.minify.Bytes(s.ctype, src)
+			} else if sg.Minify != nil && (s.Ext == ".js" || s.Ext == ".css") {
+				if _, ok := parseCtype[s.Ctype]; ok {
+					b, err := sg.Minify.Bytes(s.Ctype, src)
 					if err != nil {
 						return err
 					}
@@ -420,27 +433,27 @@ func (sg *SiteGen) build(path string) error {
 		if err := os.MkdirAll(filepath.Dir(pubPath), os.ModePerm); err != nil {
 			return err
 		}
-		if err := ioutil.WriteFile(pubPath, src, os.ModePerm); err != nil {
+		if err := os.WriteFile(pubPath, src, os.ModePerm); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (sg *SiteGen) buildAll(reload bool) {
+func (sg *SiteGen) BuildAll(reload bool) {
 	out := make(map[string]int)
-	if sg.clean {
-		if err := os.RemoveAll(sg.publicPath); err != nil {
-			log.Fatalln("Failed to clean ", sg.publicPath, " error ", err)
+	if sg.Clean {
+		if err := os.RemoveAll(sg.PublicPath); err != nil {
+			log.Fatalln("Failed to clean ", sg.PublicPath, " error ", err)
 		}
 	}
 	sg.genSources = nil
 	for k, s := range sg.sources {
 		if reload {
-			s.reloadContent()
+			s.ReloadContent()
 		}
-		out[s.ext]++
-		if err := sg.build(k); err != nil {
+		out[s.Ext]++
+		if err := sg.Build(k); err != nil {
 			log.Println("Build ", k, " error ", err)
 		}
 	}
@@ -450,13 +463,17 @@ func (sg *SiteGen) buildAll(reload bool) {
 	}
 }
 
-func (sg *SiteGen) path(path string) string {
-	return sg.basePath + strings.TrimLeft(path, "/")
+func (sg *SiteGen) ClearCache() {
+	sg.TplCache = make(map[string]*texttemplate.Template)
 }
 
-func (sg *SiteGen) data(name string) interface{} {
-	path := filepath.Join(sg.sitePath, sg.dataDir, name)
-	data, err := ioutil.ReadFile(path)
+func (sg *SiteGen) Path(path string) string {
+	return sg.BasePath + strings.TrimLeft(path, "/")
+}
+
+func (sg *SiteGen) Data(name string) interface{} {
+	path := filepath.Join(sg.SitePath, sg.DataDir, name)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		log.Println("loadData failed", path, err)
 		return nil
@@ -469,24 +486,24 @@ func (sg *SiteGen) data(name string) interface{} {
 	return d
 }
 
-func (sg *SiteGen) localToPath(s *Source) string {
+func (sg *SiteGen) LocalToPath(s *Source) string {
 	metaPath, ok := s.Meta["path"]
 	var path string
 	if ok {
 		path = fmt.Sprint(metaPath)
 	} else {
-		path = strings.Replace(s.Local, filepath.Join(sg.sitePath, sg.sourceDir), "", 1)
-		switch s.ext {
+		path = strings.Replace(s.Local, filepath.Join(sg.SitePath, sg.SourceDir), "", 1)
+		switch s.Ext {
 		case ".html", ".htm":
-			path = strings.TrimSuffix(path, s.ext)
+			path = strings.TrimSuffix(path, s.Ext)
 			path = strings.TrimSuffix(path, "index")
 		}
 		path = strings.ReplaceAll(path, "\\", "/")
 	}
-	return sg.basePath + strings.TrimLeft(path, "/")
+	return sg.BasePath + strings.TrimLeft(path, "/")
 }
 
-func (sg *SiteGen) getSources(prop string, pattern string) []*Source {
+func (sg *SiteGen) GetSources(prop string, pattern string) []*Source {
 	filtered := []*Source{}
 	g, err := glob.Compile(pattern)
 	if err != nil {
@@ -494,7 +511,7 @@ func (sg *SiteGen) getSources(prop string, pattern string) []*Source {
 		return filtered
 	}
 	for _, s := range sg.sources {
-		if g.Match(s.value(prop)) {
+		if g.Match(s.Value(prop)) {
 			filtered = append(filtered, s)
 		}
 	}
@@ -502,84 +519,27 @@ func (sg *SiteGen) getSources(prop string, pattern string) []*Source {
 	return filtered
 }
 
-func (s *Source) reloadContent() []byte {
-	s.content = nil
-	return s.loadContent()
-}
+// Helper Functions
 
-func (s *Source) loadContent() []byte {
-	if s.content == nil {
-		s.page = 0
-		s.pages = 0
-		var (
-			meta    []byte
-			content []byte
-		)
-		c, err := ioutil.ReadFile(s.Local)
-		if err != nil {
-			log.Println("Source loading failed ", err)
-			return nil
-		}
-		_, txtCtype := parseCtype[s.ctype]
-		if txtCtype {
-			meta, content = parseContent(c, "---")
-		} else {
-			content = c
-		}
-		s.Meta = make(map[string]interface{})
-		if txtCtype && meta != nil {
-			if err := yaml.Unmarshal(meta, &s.Meta); err != nil {
-				log.Println(s.Local, "meta error", err)
-			} else {
-				// override path
-				if p, ok := s.Meta["path"]; ok {
-					s.Path = fmt.Sprint(p)
-				}
-			}
-		}
-		s.content = content
+func isDirEmpty(name string) (bool, error) {
+	f, err := os.Open(name)
+	if err != nil {
+		return false, err
 	}
-	s.Path = s.sg.localToPath(s)
-	return s.content
-}
+	defer f.Close()
 
-func (s *Source) value(prop string) string {
-	var val string
-	switch prop {
-	case "Path":
-		val = s.Path
-	case "Local":
-		val = s.Local
-	case "Filename":
-		val = filepath.Base(s.Local)
-	default:
-		if strings.HasPrefix(prop, "Meta.") {
-			val = fmt.Sprint(s.Meta[prop[5:]])
-		}
+	_, err = f.Readdirnames(1)
+	if err == io.EOF {
+		return true, nil
 	}
-	return val
-}
-
-func parseContent(content []byte, sep string) ([]byte, []byte) {
-	c := string(content)
-	cc := c
-	idx := strings.Index(c, sep)
-	t := len(sep)
-	if idx >= 0 {
-		c = c[idx+t:]
-		idx = strings.Index(c, sep)
-		if idx >= 0 {
-			c = c[:idx]
-			return []byte(c), []byte(strings.ReplaceAll(cc, sep+c+sep, ""))
-		}
-	}
-	return nil, content
+	return false, err
 }
 
 func runCommand(run string) {
-	cmdWG.Add(1)
-	defer cmdWG.Done()
 	c := strings.Split(run, " ")
+	if len(c) == 0 {
+		return
+	}
 	cmd := exec.Command(c[0], c[1:]...)
 	stdout, err := cmd.Output()
 	if err != nil {
@@ -649,7 +609,7 @@ func sortBy(prop string, order string, list interface{}) (result []interface{}) 
 func valueOf(key string, a reflect.Value) string {
 	v := a.Interface()
 	if src, ok := v.(*Source); ok {
-		return src.value(key)
+		return src.Value(key)
 	}
 	if val, ok := v.(kv); ok {
 		if key == "Key" {
@@ -740,18 +700,4 @@ func pages(s *Source) (pages []Page) {
 		}
 	}
 	return
-}
-
-func isDirEmpty(name string) (bool, error) {
-	f, err := os.Open(name)
-	if err != nil {
-		return false, err
-	}
-	defer f.Close()
-
-	_, err = f.Readdirnames(1)
-	if err == io.EOF {
-		return true, nil
-	}
-	return false, err
 }

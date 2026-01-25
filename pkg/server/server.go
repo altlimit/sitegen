@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
 	"bytes"
@@ -32,16 +32,16 @@ initHotReload();
 	</script>`
 )
 
-type staticServer struct {
-	publicDir      string
-	baseDir        string
-	notifier       chan []byte
+type StaticServer struct {
+	PublicDir      string
+	BaseDir        string
+	Notifier       chan []byte
 	newClients     chan chan []byte
 	closingClients chan chan []byte
 	clients        map[chan []byte]bool
 }
 
-func (ss *staticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (ss *StaticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/__hotreload" {
 		flusher, ok := w.(http.Flusher)
 		if !ok {
@@ -78,7 +78,7 @@ func (ss *staticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		fs := http.Dir(ss.publicDir)
+		fs := http.Dir(ss.PublicDir)
 		name := r.URL.Path
 		f, err := fs.Open(name)
 		if err != nil {
@@ -88,10 +88,10 @@ func (ss *staticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			if errM := err.Error(); strings.Contains(errM, "no such file") || strings.Contains(errM, "cannot find the file specified") {
 				var err2 error
-				f, err2 = fs.Open(ss.baseDir + "404.html")
+				f, err2 = fs.Open(ss.BaseDir + "404.html")
 				if err2 == nil {
 					err = nil
-					log.Println(name, " not found in ", ss.publicDir)
+					log.Println(name, " not found in ", ss.PublicDir)
 				}
 			}
 			if err != nil {
@@ -131,6 +131,7 @@ func (ss *staticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		if ctype := mime.TypeByExtension(filepath.Ext(d.Name())); ctype != "" {
 			w.Header().Set("Content-Type", ctype)
+
 		}
 		w.WriteHeader(http.StatusOK)
 
@@ -150,14 +151,14 @@ func (ss *staticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (ss *staticServer) listen() {
+func (ss *StaticServer) Listen() {
 	for {
 		select {
 		case s := <-ss.newClients:
 			ss.clients[s] = true
 		case s := <-ss.closingClients:
 			delete(ss.clients, s)
-		case event := <-ss.notifier:
+		case event := <-ss.Notifier:
 			for clientMessageChan := range ss.clients {
 				clientMessageChan <- event
 			}
@@ -166,16 +167,16 @@ func (ss *staticServer) listen() {
 
 }
 
-func newStaticServer(dir, base string) *staticServer {
-	ss := &staticServer{
-		publicDir:      dir,
-		baseDir:        base,
-		notifier:       make(chan []byte, 1),
+func NewStaticServer(dir, base string) *StaticServer {
+	ss := &StaticServer{
+		PublicDir:      dir,
+		BaseDir:        base,
+		Notifier:       make(chan []byte, 1),
 		newClients:     make(chan chan []byte),
 		closingClients: make(chan chan []byte),
 		clients:        make(map[chan []byte]bool),
 	}
-	go ss.listen()
+	go ss.Listen()
 	return ss
 }
 

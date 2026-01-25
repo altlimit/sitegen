@@ -2,59 +2,84 @@
 
 set -e
 
+REPO="altlimit/sitegen"
+INSTALL_DIR="$HOME/.altlimit/bin"
+BIN_NAME="sitegen"
+
+echo "Installing $BIN_NAME from $REPO..."
+
 add_to_path() {
-  shell="$SHELL";
-  rcfile=".bashrc"
-  if [[ "$shell" == *"zsh" ]]; then
-    rcfile=".zshrc";
-  fi
-  if grep -q "/.altlimit/bin" "$HOME/$rcfile"; then
-    echo "~/.altlimit/bin already in $rcfile"
+  shell_profile=""
+  case "$SHELL" in
+    */zsh) shell_profile="$HOME/.zshrc" ;;
+    */bash) shell_profile="$HOME/.bashrc" ;;
+    *) shell_profile="$HOME/.profile" ;;
+  esac
+
+  if [ -f "$shell_profile" ]; then
+    if ! grep -q "$INSTALL_DIR" "$shell_profile"; then
+      echo "Adding $INSTALL_DIR to PATH in $shell_profile"
+      echo "export PATH=\$PATH:$INSTALL_DIR" >> "$shell_profile"
+      echo "Restart your terminal or run 'source $shell_profile' to use sitegen directly."
+    else
+      echo "$INSTALL_DIR is already in $shell_profile"
+    fi
   else
-    echo "Adding ~/.altlimit/bin to PATH in $rcfile";
-    echo 'export PATH=$PATH:$HOME/.altlimit/bin' >> $HOME/$rcfile;
-    echo "Restart your terminal or run 'source ~/$rcfile'"
+    echo "Could not detect shell profile. Please add $INSTALL_DIR to your PATH manually."
   fi
 }
 
 install_binary() {
-  if [[ ! -d $HOME/.altlimit/bin ]]; then
-    echo "Making $HOME/.altlimit/bin"
-    mkdir -p $HOME/.altlimit/bin;
+  URL="$1"
+  mkdir -p "$INSTALL_DIR"
+  
+  echo "Downloading $URL..."
+  TEMP_FILE=$(mktemp)
+  if curl -s -S -L -o "$TEMP_FILE" "$URL"; then
+    if [[ "$URL" == *.zip ]]; then
+        unzip -q -o "$TEMP_FILE" -d "$INSTALL_DIR"
+    else
+        tar -xzf "$TEMP_FILE" -C "$INSTALL_DIR"
+    fi
+    rm "$TEMP_FILE"
+  else
+    echo "Download failed."
+    rm "$TEMP_FILE"
+    exit 1
   fi
-  echo "Downloading latest sitegen binary at: $1";
-  curl -o $HOME/.altlimit/bin/sitegen.tgz -s -S -L "$1"
-  tar -xf $HOME/.altlimit/bin/sitegen.tgz -C $HOME/.altlimit/bin/
-  rm $HOME/.altlimit/bin/sitegen.tgz
-  if [ $? -ne 0 ]; then
-    echo "Download failed.";
-    exit 1;
-  fi
-  chmod +x $HOME/.altlimit/bin/sitegen;
-  add_to_path;
-  echo "sitegen has been installed at $HOME/.altlimit/bin";
+
+  chmod +x "$INSTALL_DIR/$BIN_NAME"
+  add_to_path
+  echo "$BIN_NAME installed successfully at $INSTALL_DIR/$BIN_NAME"
 }
 
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-       MACHINE_TYPE=`uname -m`
-       if [ ${MACHINE_TYPE} == 'x86_64' ]; then
-          install_binary "https://github.com/altlimit/sitegen/releases/download/latest/linux.tgz"
-       else
-          echo "${MACHINE_TYPE} not supported. Try building from source.";
-          exit 1;
-       fi
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-        # Mac OSX
-       MACHINE_TYPE=`uname -m`
-       if [ ${MACHINE_TYPE} == 'x86_64' ]; then
-          install_binary "https://github.com/altlimit/sitegen/releases/download/latest/darwin.tgz"
-       elif [ ${MACHINE_TYPE} == 'arm64' ]; then
-          install_binary "https://github.com/altlimit/sitegen/releases/download/latest/darwin-arm64.tgz"
-       else
-          echo "${MACHINE_TYPE} not supported. Try building from source.";
-          exit 1;
-       fi
-else
-       echo "$OSTYPE not yet supported.";
-       exit 1;
-fi
+OS="$(uname -s)"
+ARCH="$(uname -m)"
+DOWNLOAD_URL=""
+
+case "$OS" in
+    Linux)
+        if [ "$ARCH" == "x86_64" ]; then
+            DOWNLOAD_URL="https://github.com/$REPO/releases/download/latest/linux.tgz"
+        else
+            echo "Unsupported architecture: $ARCH for Linux"
+            exit 1
+        fi
+        ;;
+    Darwin)
+        if [ "$ARCH" == "x86_64" ]; then
+            DOWNLOAD_URL="https://github.com/$REPO/releases/download/latest/darwin.tgz"
+        elif [ "$ARCH" == "arm64" ]; then
+            DOWNLOAD_URL="https://github.com/$REPO/releases/download/latest/darwin-arm64.tgz"
+        else
+            echo "Unsupported architecture: $ARCH for macOS"
+            exit 1
+        fi
+        ;;
+    *)
+        echo "Unsupported OS: $OS"
+        exit 1
+        ;;
+esac
+
+install_binary "$DOWNLOAD_URL"

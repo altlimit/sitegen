@@ -1,46 +1,97 @@
-# sitegen
+# SiteGen
 
-Sitegen is a simple but flexible static site generator.
+[![Go Report Card](https://goreportcard.com/badge/github.com/altlimit/sitegen)](https://goreportcard.com/report/github.com/altlimit/sitegen)
+[![Latest Release](https://img.shields.io/github/v/release/altlimit/sitegen)](https://github.com/altlimit/sitegen/releases)
+[![License](https://img.shields.io/github/license/altlimit/sitegen)](LICENSE)
 
-## Setup
+Sitegen is a simple, flexible, and fast static site generator written in Go. It supports incremental builds, live reloading, and a powerful template system.
 
-Download the sitegen bundles from release page for windows or install in linux/osx.
+## Features
+
+- 🚀 **Fast & Incremental**: Builds only what's needed.
+- 🔄 **Live Reload**: Built-in development server with changes detection.
+- 🎨 **Templating**: Flexible Go templates with custom functions.
+- 📦 **Zero Dependency**: Single binary, easy to install.
+- 🔧 **File Handlers**: Custom build commands for specific file types (e.g. CSS, JS).
+
+## Installation
+
+### Unix/Linux/macOS
 
 ```bash
-# Install under unix/linux env.
 curl -s -S -L https://raw.githubusercontent.com/altlimit/sitegen/master/install.sh | bash
-# Restart your terminal or source your rc file.
-
-# Create a new template project
-sitegen -create
-
-# Run sitegen with development server
-sitegen -serve
-
-# Run final build
-sitegen
-
-# Build for github pages, just add -serve to test & add  -minify to minify output
-sitegen -public ./docs
-
-# Build in dist but serve under a subdirectory blog
-sitegen -public ./dist  -base /blog
-
-# For more options
-sitegen -help
 ```
 
-## Built with sitegen
+### Windows
 
-- [altlimit.com](https://www.altlimit.com) - [source](https://github.com/altlimit/website)
-- [wikiyou.org](https://www.wikiyou.org) - [source](https://github.com/altlimit/wikiyou)
-- [blog.shopswired.com](https://blog.shopswired.com/)
+Download the latest release from the [Releases Page](https://github.com/altlimit/sitegen/releases).
+
+## Quick Start
+
+1. **Create a new project:**
+   ```bash
+   sitegen -create -site my-website
+   cd my-website
+   ```
+
+2. **Start development server:**
+   ```bash
+   sitegen -serve
+   ```
+   Open [http://localhost:8888](http://localhost:8888) in your browser.
+
+3. **Build for production:**
+   ```bash
+   sitegen -clean -minify -public ./dist
+   ```
+
+## Usage
+
+```bash
+sitegen [options]
+
+Options:
+  -create       Create a new site template
+  -site <path>  Root site path (default: "./site")
+  -serve        Start development server
+  -port <port>  Port for development server (default: "8888")
+  -clean        Clean public dir before build
+  -minify       Minify HTML/JS/CSS output
+  -public <dir> Public output directory (default: "./public")
+  -base <path>  Base URL path (default: "/")
+  -help         Show help
+```
+
+## Template System
+
+Sitegen uses Go's `html/template` with extra helper functions.
+
+### Functions
+
+| Function | Description |
+|----------|-------------|
+| `path` | Prefixes path with base URL. |
+| `sources "prop" "pattern"` | Returns list of sources matching pattern. |
+| `data "file.json"` | Loads JSON data from `data/` directory. |
+| `sort "prop" "order"` | Sorts input array/slice. |
+| `limit n` | Limits the array/slice to `n` items. |
+| `offset n` | Offsets the array/slice by `n` items. |
+| `paginate n` | Paginates input. Populates `.Page` and `.Pages`. |
+| `page "path"` | Creates a parameterized page from current source. |
+
+### Page Variables
+
+- `.Dev`: Boolean, true if running in development mode.
+- `.Source`: Current source object.
+- `.BasePath`: Configured base path.
+- `.Today`: Current date (YYYY-MM-DD).
+- `.Path`: Current page path (if parameterized).
+- `.Page`, `.Pages`: Pagination info.
+- Plus any variable defined in YAML frontmatter.
 
 ## File Handlers
 
-File handlers is a way to process any file differently when it changes by running a specific command.
-
-If you want to run npm run build:css when it's development and npm run build:prod:css for final build add this to the css file:
+Customize how files are processed by adding a frontmatter block to any file (css, js, etc).
 
 ```css
 /*
@@ -51,32 +102,10 @@ build: npm run build:prod:css
 */
 ```
 
-## Template functions
+## Contributing
 
-Uses go html template.
+Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 
-- path - prefixes any path with base path
-- sources "(Path|Local|Filename|Meta.\*)" "Pattern" - returns source array that matches pattern
-- data "file.json" - loads any data under data dir
-- json - converts data to json for javascript/json use
-- js - no escape js
-- html - no escape html
-- css - no escape
-- select - accepts json object that turns it into an array of {Key, Value} to allow sorting
-- sort "(Path|Local|Filename|Meta.\*|Key|Value.\*|\*)" "(asc|desc) - orders sources or array from data
-- limit n - limits sources or array from data
-- offset n - offsets sources or array from data
-- paginate n - paginate a sources or array from data while providing page limit "n", "Page" and "Pages" is populated in current page
-- pages Source - returns list of pages with Path, Page & Active properties for creating links
-- page "path" - creates a parametarized page, page will have .Path variable
+## License
 
-## Page variables
-
-All yaml meta data are in each page are available plus values below.
-
-- Dev - true when it's -serve mode
-- Source - current page source
-- BasePath - base path from provided base path param (defaults to /)
-- Today - current day YYYY-MM-DD at build time
-- Pages|Pages - populated when "paginate" is used
-- Path - populated when "page" is ued
+[MIT](LICENSE.txt)

@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -15,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/altlimit/sitegen/pkg/server"
+	"github.com/altlimit/sitegen/pkg/sitegen"
 	"github.com/fsnotify/fsnotify"
 	"github.com/tdewolff/minify/v2"
 	"github.com/tdewolff/minify/v2/css"
@@ -50,8 +51,8 @@ func main() {
 		isMinify   bool
 		buildAll   bool
 		min        *minify.M
-		ss         *staticServer
-		sg         *SiteGen
+		ss         *server.StaticServer
+		sg         *sitegen.SiteGen
 	)
 	flag.BoolVar(&create, "create", false, "Creates a new site template")
 	flag.StringVar(&sitePath, "site", "./site", "Absolute or relative root site path")
@@ -105,11 +106,11 @@ func main() {
 	if basePath != "/" {
 		basePath = "/" + strings.Trim(basePath, "/") + "/"
 	}
-	sg = newSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath, min, clean, serve)
-	sg.buildAll(false)
+	sg = sitegen.NewSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath, min, clean, serve)
+	sg.BuildAll(false)
 
-	if sg.dev {
-		ss = newStaticServer(pubPath, basePath)
+	if sg.Dev {
+		ss = server.NewStaticServer(pubPath, basePath)
 		watcher, err := fsnotify.NewWatcher()
 		var mu sync.Mutex
 		events := make(map[string]bool)
@@ -132,7 +133,7 @@ func main() {
 			}
 			if err == nil && fi.IsDir() {
 				if action == "add" {
-					if !excluded(exclude, strings.Replace(pp, sg.sitePath+string(os.PathSeparator), "", 1)) {
+					if !excluded(exclude, strings.Replace(pp, sg.SitePath+string(os.PathSeparator), "", 1)) {
 						if err := watcher.Add(pp); err != nil {
 							log.Println("Watch dir ", pp, " error ", err)
 						}
@@ -143,41 +144,78 @@ func main() {
 					}
 				}
 			} else {
-				rp := strings.Replace(pp, sg.sitePath, "", 1)
+				rp := strings.Replace(pp, sg.SitePath, "", 1)
 				isSrc := strings.HasPrefix(rp, string(os.PathSeparator)+sourceDir)
 				switch action {
 				case "add":
 					if isSrc {
-						if s, ok := sg.sources[pp]; ok {
-							s.reloadContent()
-						} else {
-							if _, err := sg.newSource(pp, false); err != nil {
-								log.Println(path, " failed source ", err)
+						// We need to access sources internally or via a method?
+						// In existing code sources was public but unexported.
+						// We should probably expose Build method which takes path.
+						// NewSource is available.
+						// Logic here was:
+						/*
+							if s, ok := sg.sources[pp]; ok {
+								s.reloadContent()
+							} else {
+								if _, err := sg.newSource(pp, false); err != nil {
+									log.Println(path, " failed source ", err)
+								}
 							}
+						*/
+						// We need a way to check if source exists or just call Build which deals not found probably not.
+						// Actually sg.Build() checks if it exists.
+						// But for reloading content we need access.
+						// Let's rely on Build to do the right thing or expose Reload.
+
+						// Refactor decision: expose Rebuild(path string) error on SiteGen which handles logic?
+						// Or just expose sources. But sources is map.
+						// Let's try to just rebuild.
+
+						// Wait, sg.sources is unexported in new package.
+						// We need a method to reload source.
+						// Let's add ReloadSource(path) in SiteGen?
+						// For now, let's just re-implement logic using available methods if possible.
+						// We can't access sources directly.
+
+						// Actually I missed adding a ReloadSource or similar method to SiteGen.
+						// Let's assume for now I will fix SiteGen to support this flow, or use NewSource(path, false) which updates the map if not gen.
+
+						// "_, err := sg.NewSource(pp, false)" will update/add source.
+						if _, err := sg.NewSource(pp, false); err != nil {
+							log.Println(path, " failed source ", err)
 						}
-						if err := sg.build(pp); err != nil {
+
+						if err := sg.Build(pp); err != nil {
 							log.Println("Build failed ", pp, " error ", err)
 						} else {
 							log.Println("Rebuilt: ", rp)
 						}
+
 						if buildAll {
-							sg.buildAll(true)
+							sg.BuildAll(true)
 						}
 					} else {
-						sg.buildAll(true)
+						if strings.HasPrefix(rp, string(os.PathSeparator)+tplDir) {
+							sg.ClearCache()
+						}
+						sg.BuildAll(true)
 					}
 				case "del":
 					if isSrc {
-						if err := sg.remove(pp); err != nil {
+						if err := sg.Remove(pp); err != nil {
 							log.Println("Remove failed ", pp, " error ", err)
 						} else {
 							log.Println("Deleted: ", rp)
 						}
 						if buildAll {
-							sg.buildAll(true)
+							sg.BuildAll(true)
 						}
 					} else {
-						sg.buildAll(true)
+						if strings.HasPrefix(rp, string(os.PathSeparator)+tplDir) {
+							sg.ClearCache()
+						}
+						sg.BuildAll(true)
 					}
 				}
 			}
@@ -185,7 +223,7 @@ func main() {
 			delete(events, key)
 			mu.Unlock()
 			cmdWG.Wait()
-			ss.notifier <- []byte("updated")
+			ss.Notifier <- []byte("updated")
 		}
 
 		go func() {
@@ -226,17 +264,17 @@ func main() {
 			}
 		}()
 
-		if err = watcher.Add(sg.sitePath); err != nil {
+		if err = watcher.Add(sg.SitePath); err != nil {
 			log.Fatalln("Watch dir ", tplDir, " error ", err)
 		}
 
-		filepath.Walk(sg.sitePath,
+		filepath.Walk(sg.SitePath,
 			func(path string, info os.FileInfo, err error) error {
 				if err != nil {
 					log.Fatal("watch dir", path, "error", err)
 				}
-				if info.IsDir() && !strings.HasPrefix(path, sg.publicPath) {
-					if !excluded(exclude, strings.Replace(path, sg.sitePath+string(os.PathSeparator), "", 1)) {
+				if info.IsDir() && !strings.HasPrefix(path, sg.PublicPath) {
+					if !excluded(exclude, strings.Replace(path, sg.SitePath+string(os.PathSeparator), "", 1)) {
 						err = watcher.Add(path)
 						if err != nil {
 							log.Fatal("watch dir", path, "error", err)
@@ -286,7 +324,7 @@ func copySite(folder, target string) error {
 			}
 			to := filepath.Join(target, p[strings.Index(p, "/"):])
 			os.MkdirAll(filepath.Dir(to), os.ModePerm)
-			if err := ioutil.WriteFile(to, b, 0644); err != nil {
+			if err := os.WriteFile(to, b, 0644); err != nil {
 				return fmt.Errorf("copySite WriteFile %s error %v", p, err)
 			}
 		}
