@@ -260,7 +260,15 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 		}
 	}
 
-	tpl, err = tpl.Parse(string(content))
+	// Determine target template
+	var target *texttemplate.Template
+	if t := tpl.Lookup(tplName); t != nil {
+		target = t
+	} else {
+		target = tpl
+	}
+
+	target, err = target.Parse(string(content))
 	if err != nil {
 		log.Println("Parse ", s.Local, " error ", err)
 		return nil
@@ -279,7 +287,7 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 	data["Today"] = time.Now().Format("2006-01-02")
 
 	tplBuf := new(bytes.Buffer)
-	if err := tpl.Execute(tplBuf, data); err != nil {
+	if err := target.Execute(tplBuf, data); err != nil {
 		log.Println("Parse execute ", s.Local, " error ", err)
 		return nil
 	}

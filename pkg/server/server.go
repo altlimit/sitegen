@@ -22,10 +22,12 @@ function initHotReload() {
 			}
 		}
 		es.onerror = function(err) {
-			console.error("ES:", err);
 			es.close();
-			setTimeout(initHotReload, 5000);
+			setTimeout(initHotReload, 2000);
 		};
+		window.addEventListener("beforeunload", function() {
+			es.close();
+		});
 	}
 }
 initHotReload();
@@ -52,23 +54,22 @@ func (ss *StaticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
+		fmt.Fprintf(w, "data: connected\n\n")
+		flusher.Flush()
 
-		messageChan := make(chan []byte)
+		messageChan := make(chan []byte, 1)
 		ss.newClients <- messageChan
 		defer func() {
 			ss.closingClients <- messageChan
 		}()
-
-		notify := r.Context().Done()
-
-		go func() {
-			<-notify
-			ss.closingClients <- messageChan
-		}()
-
 		for {
-			fmt.Fprintf(w, "data: %s\n\n", <-messageChan)
-			flusher.Flush()
+			select {
+			case msg := <-messageChan:
+				fmt.Fprintf(w, "data: %s\n\n", msg)
+				flusher.Flush()
+			case <-r.Context().Done():
+				return
+			}
 		}
 	} else {
 		const indexPage = "/index.html"
@@ -160,11 +161,14 @@ func (ss *StaticServer) Listen() {
 			delete(ss.clients, s)
 		case event := <-ss.Notifier:
 			for clientMessageChan := range ss.clients {
-				clientMessageChan <- event
+				select {
+				case clientMessageChan <- event:
+				default:
+					// Slow client, skip message or it will block everyone
+				}
 			}
 		}
 	}
-
 }
 
 func NewStaticServer(dir, base string) *StaticServer {
@@ -172,8 +176,8 @@ func NewStaticServer(dir, base string) *StaticServer {
 		PublicDir:      dir,
 		BaseDir:        base,
 		Notifier:       make(chan []byte, 1),
-		newClients:     make(chan chan []byte),
-		closingClients: make(chan chan []byte),
+		newClients:     make(chan chan []byte, 32),
+		closingClients: make(chan chan []byte, 32),
 		clients:        make(map[chan []byte]bool),
 	}
 	go ss.Listen()
