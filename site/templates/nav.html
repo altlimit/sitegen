@@ -3,7 +3,7 @@
 <header>
     <div class="container">
         <nav>
-            <a href="/" class="logo">SiteGen</a>
+            <a href="{{.BasePath}}" class="logo">SiteGen</a>
             <div class="nav-links">
                 {{ range $links }}
                 <a href="{{.path | path}}" class="{{if eq $.Path .path}}active{{end}}">{{.name}}</a>

@@ -43,7 +43,7 @@ jobs:
       - name: Build site
         run: |
           go build
-          ./sitegen -clean -minify
+          ./sitegen -clean -minify -base /sitegen
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

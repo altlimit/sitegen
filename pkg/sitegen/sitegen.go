@@ -54,7 +54,7 @@ type (
 		TplCache   map[string]*texttemplate.Template
 	}
 
-	Parser func(*Source) []byte
+	Parser func(*Source) ([]byte, error)
 	Page   struct {
 		Active bool
 		Path   string
@@ -163,10 +163,10 @@ func (sg *SiteGen) tplFuncs() map[string]interface{} {
 	}
 }
 
-func (sg SiteGen) parse(s *Source, t string) []byte {
+func (sg SiteGen) parse(s *Source, t string) ([]byte, error) {
 	content := s.LoadContent()
 	if content == nil {
-		return nil
+		return nil, fmt.Errorf("failed to load content for %s", s.Local)
 	}
 	tplName := filepath.Base(s.Local)
 	if n, ok := s.Meta["template"]; ok {
@@ -230,8 +230,7 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 	if cached, ok := sg.TplCache[t]; ok {
 		tpl, err = cached.Clone()
 		if err != nil {
-			log.Println("Template clone error", err)
-			return nil
+			return nil, fmt.Errorf("template clone error: %w", err)
 		}
 		tpl.Funcs(funcs)
 	} else {
@@ -244,7 +243,8 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 				}
 			}
 		} else {
-			log.Println("LoadTemplate error", err)
+			// This might not be fatal if we find it later? but LoadTemplate usually means base templates.
+			// log.Println("LoadTemplate error", err)
 		}
 	}
 
@@ -253,14 +253,12 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 		tpl = texttemplate.New(tplName).Funcs(funcs)
 		tplFiles, err := filepath.Glob(filepath.Join(sg.SitePath, sg.TemplateDir, "*."+t))
 		if err != nil {
-			log.Println("Load template ", s.Local, " error ", err)
-			return nil
+			return nil, fmt.Errorf("load template glob %s error %w", s.Local, err)
 		}
 		if len(tplFiles) > 0 {
 			tpl, err = tpl.ParseFiles(tplFiles...)
 			if err != nil {
-				log.Println("Parse template ", s.Local, " error ", err)
-				return nil
+				return nil, fmt.Errorf("parse template %s error %w", s.Local, err)
 			}
 		}
 	}
@@ -275,8 +273,7 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 
 	target, err = target.Parse(string(content))
 	if err != nil {
-		log.Println("Parse ", s.Local, " error ", err)
-		return nil
+		return nil, fmt.Errorf("parse %s error %w", s.Local, err)
 	}
 
 	data := map[string]interface{}{}
@@ -293,29 +290,28 @@ func (sg SiteGen) parse(s *Source, t string) []byte {
 
 	tplBuf := new(bytes.Buffer)
 	if err := target.Execute(tplBuf, data); err != nil {
-		log.Println("Parse execute ", s.Local, " error ", err)
-		return nil
+		return nil, fmt.Errorf("parse execute %s error %w", s.Local, err)
 	}
 	if t == "html" {
 		body := tplBuf.Bytes()
 		if sg.Minify != nil {
 			b, err := sg.Minify.Bytes("text/html", body)
 			if err != nil {
-				log.Println("Minify ", s.Local, " error ", err)
+				return nil, fmt.Errorf("minify %s error %w", s.Local, err)
 			} else {
 				body = b
 			}
 		}
-		return body
+		return body, nil
 	}
-	return tplBuf.Bytes()
+	return tplBuf.Bytes(), nil
 }
 
-func (sg *SiteGen) text(s *Source) []byte {
+func (sg *SiteGen) text(s *Source) ([]byte, error) {
 	return sg.parse(s, "txt")
 }
 
-func (sg *SiteGen) html(s *Source) []byte {
+func (sg *SiteGen) html(s *Source) ([]byte, error) {
 	return sg.parse(s, "html")
 }
 
@@ -398,7 +394,11 @@ func (sg *SiteGen) Build(path string) error {
 		}
 		defer pubFile.Close()
 
-		if body := parser(s); body != nil {
+		body, err := parser(s)
+		if err != nil {
+			return err
+		}
+		if body != nil {
 			_, err = pubFile.Write(body)
 			if err != nil {
 				return err
@@ -418,7 +418,12 @@ func (sg *SiteGen) Build(path string) error {
 			if err != nil {
 				return err
 			}
-			_, err = childFile.Write(parser(cs))
+			cBody, err := parser(cs)
+			if err != nil {
+				childFile.Close()
+				return err
+			}
+			_, err = childFile.Write(cBody)
 			if err != nil {
 				childFile.Close()
 				return err
@@ -461,14 +466,20 @@ func (sg *SiteGen) BuildAll(reload bool) (map[string]int, error) {
 		}
 	}
 	sg.genSources = nil
+	var errs []string
 	for k, s := range sg.sources {
 		if reload {
 			s.ReloadContent()
 		}
-		out[s.Ext]++
+
 		if err := sg.Build(k); err != nil {
-			log.Println("Build ", k, " error ", err)
+			errs = append(errs, fmt.Sprintf("%s: %v", k, err))
+		} else {
+			out[s.Ext]++
 		}
+	}
+	if len(errs) > 0 {
+		return out, fmt.Errorf("%s", strings.Join(errs, "\n"))
 	}
 	return out, nil
 }

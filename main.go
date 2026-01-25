@@ -67,6 +67,8 @@ type fileMsg struct {
 }
 type statusMsg string
 
+type errMsg string
+
 type model struct {
 	sg          *sitegen.SiteGen
 	stats       map[string]int
@@ -80,6 +82,7 @@ type model struct {
 	sourceDir   string
 	lastBuild   time.Time
 	recentFiles []string
+	errorMsg    string
 }
 
 func (m model) Init() tea.Cmd {
@@ -98,12 +101,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.lastBuild = msg.time
 		m.status = "Build complete"
+		m.errorMsg = "" // Clear error on successful build
 	case fileMsg:
 		entry := fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), msg.path)
 		m.recentFiles = append(m.recentFiles, entry)
 		if len(m.recentFiles) > 10 {
 			m.recentFiles = m.recentFiles[1:]
 		}
+	case errMsg:
+		m.errorMsg = string(msg)
+		m.status = "Build failed"
 	case statusMsg:
 		m.status = string(msg)
 	}
@@ -167,6 +174,10 @@ func (m model) View() string {
 
 	// Horizontal layout
 	s.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, statsView, "  ", infoView, "  ", activityView) + "\n\n")
+
+	if m.errorMsg != "" {
+		s.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render(m.errorMsg) + "\n\n")
+	}
 
 	if m.status != "" {
 		s.WriteString(statusStyle.Render(m.status) + "\n")
@@ -351,7 +362,7 @@ func runWatcher(p *tea.Program, sg *sitegen.SiteGen, ss *server.StaticServer, ex
 					}
 
 					if err := sg.Build(pp); err != nil {
-						p.Send(statusMsg(fmt.Sprintf("Build failed %s error %v", pp, err)))
+						p.Send(errMsg(fmt.Sprintf("Build failed %s: %v", pp, err)))
 					} else {
 						// handled by fileMsg
 					}
@@ -359,7 +370,7 @@ func runWatcher(p *tea.Program, sg *sitegen.SiteGen, ss *server.StaticServer, ex
 					if buildAll {
 						s, err := sg.BuildAll(true)
 						if err != nil {
-							p.Send(statusMsg(fmt.Sprintf("BuildAll failed %v", err)))
+							p.Send(errMsg(fmt.Sprintf("BuildAll failed: %v", err)))
 						} else {
 							stats = s
 						}
@@ -370,7 +381,7 @@ func runWatcher(p *tea.Program, sg *sitegen.SiteGen, ss *server.StaticServer, ex
 					}
 					s, err := sg.BuildAll(true)
 					if err != nil {
-						p.Send(statusMsg(fmt.Sprintf("BuildAll failed %v", err)))
+						p.Send(errMsg(fmt.Sprintf("BuildAll failed: %v", err)))
 					} else {
 						stats = s
 					}
