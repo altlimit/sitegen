@@ -6,11 +6,13 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -31,7 +33,7 @@ import (
 
 var (
 	cmdWG   sync.WaitGroup
-	version = "v1.0.0"
+	version = "v1.0.1"
 
 	// Styles
 	headerStyle = lipgloss.NewStyle().
@@ -273,6 +275,12 @@ func main() {
 	}
 
 	// Serve mode
+	portInt, _ := strconv.Atoi(port)
+	finalPort := findNextAvailablePort(portInt)
+	if finalPort != portInt {
+		port = strconv.Itoa(finalPort)
+	}
+
 	ss = server.NewStaticServer(pubPath, basePath)
 	serverURL := fmt.Sprintf("http://localhost:%s%s", port, basePath)
 
@@ -548,4 +556,15 @@ func copySite(folder, target string) error {
 		}
 	}
 	return nil
+}
+
+func findNextAvailablePort(startPort int) int {
+	for port := startPort; port < startPort+100; port++ {
+		ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if err == nil {
+			ln.Close()
+			return port
+		}
+	}
+	return startPort // Fallback to original if we can't find one in range
 }
