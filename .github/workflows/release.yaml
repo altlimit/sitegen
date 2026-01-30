@@ -31,6 +31,8 @@ jobs:
 
       - name: "Build"
         run: ./build.sh
+        env:
+          VERSION: "v1.0.${{ github.run_number }}"
       - uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"

@@ -33,7 +33,7 @@ import (
 
 var (
 	cmdWG   sync.WaitGroup
-	version = "v1.0.1"
+	version = "dev"
 
 	// Styles
 	headerStyle = lipgloss.NewStyle().
@@ -192,22 +192,23 @@ func (m model) View() string {
 
 func main() {
 	var (
-		sitePath   string
-		publicPath string
-		sourceDir  string
-		dataDir    string
-		tplDir     string
-		port       string
-		basePath   string
-		exclude    string
-		create     bool
-		serve      bool
-		clean      bool
-		isMinify   bool
-		buildAll   bool
-		min        *minify.M
-		ss         *server.StaticServer
-		sg         *sitegen.SiteGen
+		sitePath    string
+		publicPath  string
+		sourceDir   string
+		dataDir     string
+		tplDir      string
+		port        string
+		basePath    string
+		exclude     string
+		create      bool
+		serve       bool
+		clean       bool
+		isMinify    bool
+		buildAll    bool
+		showVersion bool
+		min         *minify.M
+		ss          *server.StaticServer
+		sg          *sitegen.SiteGen
 	)
 	flag.BoolVar(&create, "create", false, "Creates a new site template")
 	flag.StringVar(&sitePath, "site", "./site", "Absolute or relative root site path")
@@ -221,8 +222,14 @@ func main() {
 	flag.BoolVar(&clean, "clean", false, "Clean public dir before build")
 	flag.BoolVar(&isMinify, "minify", false, "Minify (HTML|JS|CSS)")
 	flag.BoolVar(&buildAll, "buildall", false, "Always build all on change")
+	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.StringVar(&port, "port", "8888", "Port for localhost")
 	flag.Parse()
+
+	if showVersion {
+		fmt.Println(headerStyle.Render(fmt.Sprintf("SiteGen %s", version)))
+		return
+	}
 
 	if create {
 		if stat, err := os.Stat(sitePath); err == nil && stat.IsDir() {

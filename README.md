@@ -30,8 +30,9 @@ Download the latest release from the [Releases Page](https://github.com/altlimit
 
 1. **Create a new project:**
    ```bash
-   sitegen -create -site my-website
+   mkdir my-website
    cd my-website
+   sitegen -create
    ```
 
 2. **Start development server:**
@@ -42,7 +43,7 @@ Download the latest release from the [Releases Page](https://github.com/altlimit
 
 3. **Build for production:**
    ```bash
-   sitegen -clean -minify -public ./dist
+   sitegen -clean -minify
    ```
 
 ## Usage
