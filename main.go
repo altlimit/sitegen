@@ -274,10 +274,12 @@ func main() {
 	if !serve {
 		fmt.Println(headerStyle.Render(fmt.Sprintf("SiteGen %s", version)))
 		stats, err := sg.BuildAll(false)
-		if err != nil {
-			log.Fatalf("Build failed: %v", err)
-		}
 		renderStats(stats)
+		if err != nil {
+			fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true).Render("Build errors:"))
+			fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render(err.Error()))
+			os.Exit(1)
+		}
 		return
 	}
 

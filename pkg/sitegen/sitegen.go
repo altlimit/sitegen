@@ -359,6 +359,11 @@ func (sg *SiteGen) Build(path string) error {
 		return fmt.Errorf("build failed for %s: not found", path)
 	}
 
+	// Check for source loading errors (e.g. frontmatter parse errors)
+	if s.Err != nil {
+		return s.Err
+	}
+
 	pubPath := sg.sourcePath(s)
 	src := s.LoadContent()
 

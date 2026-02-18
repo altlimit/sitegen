@@ -2,7 +2,6 @@ package sitegen
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,10 +22,12 @@ type Source struct {
 	CurrentPage int
 	TotalPages  int
 	path        string
+	Err         error
 }
 
 func (s *Source) ReloadContent() []byte {
 	s.content = nil
+	s.Err = nil
 	return s.LoadContent()
 }
 
@@ -40,7 +41,7 @@ func (s *Source) LoadContent() []byte {
 		)
 		c, err := os.ReadFile(s.Local)
 		if err != nil {
-			log.Println("Source loading failed ", err)
+			s.Err = fmt.Errorf("source loading failed: %w", err)
 			return nil
 		}
 		_, txtCtype := parseCtype[s.Ctype]
@@ -52,7 +53,7 @@ func (s *Source) LoadContent() []byte {
 		s.Meta = make(map[string]interface{})
 		if txtCtype && meta != nil {
 			if err := yaml.Unmarshal(meta, &s.Meta); err != nil {
-				log.Println(s.Local, "meta error", err)
+				s.Err = fmt.Errorf("%s: frontmatter error: %w", s.Local, err)
 			} else {
 				// override path
 				if p, ok := s.Meta["path"]; ok {
