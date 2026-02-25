@@ -46,6 +46,7 @@ type (
 		BasePath    string
 		SourceDir   string
 		Minify      *minify.M
+		Webp        bool
 		Clean       bool
 		Dev         bool
 
@@ -67,7 +68,7 @@ type (
 	}
 )
 
-func NewSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath string, min *minify.M, clean bool, dev bool) *SiteGen {
+func NewSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath string, min *minify.M, clean bool, dev bool, webp bool) *SiteGen {
 	sp, err := filepath.Abs(sitePath)
 	if err != nil {
 		log.Fatalln("Site Path ", sitePath, " error ", err)
@@ -84,6 +85,7 @@ func NewSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath string, 
 		sources:     make(map[string]*Source),
 		TplCache:    make(map[string]*texttemplate.Template),
 		Dev:         dev,
+		Webp:        webp,
 	}
 
 	// load all sources keyed by local path
@@ -294,6 +296,13 @@ func (sg SiteGen) parse(s *Source, t string) ([]byte, error) {
 	}
 	if t == "html" {
 		body := tplBuf.Bytes()
+		if sg.Webp {
+			if b, err := rewriteHTMLImages(body, sg.Webp); err == nil {
+				body = b
+			} else {
+				log.Println("webp rewrite error", err)
+			}
+		}
 		if sg.Minify != nil {
 			b, err := sg.Minify.Bytes("text/html", body)
 			if err != nil {
@@ -456,8 +465,17 @@ func (sg *SiteGen) Build(path string) error {
 		if err := os.MkdirAll(filepath.Dir(pubPath), os.ModePerm); err != nil {
 			return err
 		}
-		if err := os.WriteFile(pubPath, src, os.ModePerm); err != nil {
-			return err
+		if (s.Ext == ".jpg" || s.Ext == ".jpeg" || s.Ext == ".png") && src != nil && (sg.Minify != nil || sg.Webp) {
+			if err := sg.processImage(src, pubPath, s.Ext); err != nil {
+				log.Println("image processing error", pubPath, err)
+				if err := os.WriteFile(pubPath, src, os.ModePerm); err != nil {
+					return err
+				}
+			}
+		} else {
+			if err := os.WriteFile(pubPath, src, os.ModePerm); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

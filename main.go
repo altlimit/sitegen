@@ -204,6 +204,7 @@ func main() {
 		serve       bool
 		clean       bool
 		isMinify    bool
+		isWebp      bool
 		buildAll    bool
 		showVersion bool
 		min         *minify.M
@@ -221,6 +222,7 @@ func main() {
 	flag.StringVar(&exclude, "exclude", "^(node_modules|bower_components)", "Exclude from watcher")
 	flag.BoolVar(&clean, "clean", false, "Clean public dir before build")
 	flag.BoolVar(&isMinify, "minify", false, "Minify (HTML|JS|CSS)")
+	flag.BoolVar(&isWebp, "webp", false, "Generate WebP optimized images")
 	flag.BoolVar(&buildAll, "buildall", false, "Always build all on change")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.StringVar(&port, "port", "8888", "Port for localhost")
@@ -268,7 +270,7 @@ func main() {
 	if basePath != "/" {
 		basePath = "/" + strings.Trim(basePath, "/") + "/"
 	}
-	sg = sitegen.NewSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath, min, clean, serve)
+	sg = sitegen.NewSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath, min, clean, serve, isWebp)
 
 	// Single run
 	if !serve {

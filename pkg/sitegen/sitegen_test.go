@@ -8,7 +8,7 @@ import (
 )
 
 func testSiteGen() *SiteGen {
-	return NewSiteGen("../../site", "templates", "data", "src", "./public", "/", nil, true, true)
+	return NewSiteGen("../../site", "templates", "data", "src", "./public", "/", nil, true, true, false)
 }
 
 func TestGetSources(t *testing.T) {
