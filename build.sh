@@ -5,10 +5,10 @@ if [ -z "$VERSION" ]; then
 fi
 echo "Building version $VERSION..."
 rm -rf ./build
-CGO_ENABLED=1 CC="zig cc -target x86_64-windows-gnu" CXX="zig c++ -target x86_64-windows-gnu" GOOS=windows GOARCH=amd64 go build -tags netgo -ldflags "-X main.version=$VERSION" -o build/win/sitegen.exe
-CGO_ENABLED=1 CC="zig cc -target x86_64-linux-gnu" CXX="zig c++ -target x86_64-linux-gnu" GOOS=linux GOARCH=amd64 go build -tags netgo -ldflags "-X main.version=$VERSION" -o build/linux/sitegen
-CGO_ENABLED=1 CC="zig cc -target x86_64-macos-none" CXX="zig c++ -target x86_64-macos-none" GOOS=darwin GOARCH=amd64 go build -tags netgo -ldflags "-X main.version=$VERSION" -o build/darwin/sitegen
-CGO_ENABLED=1 CC="zig cc -target aarch64-macos-none" CXX="zig c++ -target aarch64-macos-none" GOOS=darwin GOARCH=arm64 go build -tags netgo -ldflags "-X main.version=$VERSION" -o build/darwin-arm64/sitegen
+CGO_ENABLED=1 CC="zig cc -target x86_64-windows-gnu" CXX="zig c++ -target x86_64-windows-gnu" GOOS=windows GOARCH=amd64 go build -tags netgo -ldflags "-linkmode internal -X main.version=$VERSION" -o build/win/sitegen.exe
+CGO_ENABLED=1 CC="zig cc -target x86_64-linux-gnu" CXX="zig c++ -target x86_64-linux-gnu" GOOS=linux GOARCH=amd64 go build -tags netgo -ldflags "-linkmode internal -X main.version=$VERSION" -o build/linux/sitegen
+CGO_ENABLED=1 CC="zig cc -target x86_64-macos-none" CXX="zig c++ -target x86_64-macos-none" GOOS=darwin GOARCH=amd64 go build -tags netgo -ldflags "-linkmode internal -X main.version=$VERSION" -o build/darwin/sitegen
+CGO_ENABLED=1 CC="zig cc -target aarch64-macos-none" CXX="zig c++ -target aarch64-macos-none" GOOS=darwin GOARCH=arm64 go build -tags netgo -ldflags "-linkmode internal -X main.version=$VERSION" -o build/darwin-arm64/sitegen
 cd build/win
 zip -rq ../win.zip . -x ".*"
 cd ../linux
