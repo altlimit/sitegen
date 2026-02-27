@@ -82,13 +82,29 @@ Sitegen uses Go's `html/template` with extra helper functions.
 
 ### Page Variables
 
+- `.<key>`: Any variable defined in YAML frontmatter is accessible directly at the root (e.g., `.title`). When iterating over sources (e.g. `range sources`), use `.Meta.<key>` on the source item instead.
 - `.Dev`: Boolean, true if running in development mode.
-- `.Source`: Current source object.
+- `.Source`: Current source object (`.Source.Meta` has the raw frontmatter map).
 - `.BasePath`: Configured base path.
 - `.Today`: Current date (YYYY-MM-DD).
+- `.Year`: Current year (YYYY).
 - `.Path`: Current page path (if parameterized).
 - `.Page`, `.Pages`: Pagination info.
-- Plus any variable defined in YAML frontmatter.
+
+### Basic Example
+
+**`src/about.html`**:
+```html
+---
+title: About Us
+template: main.html
+---
+
+{{define "content"}}
+  <h1>{{ .title }}</h1>
+  <p>Welcome to our site!</p>
+{{end}}
+```
 
 ## File Handlers
 

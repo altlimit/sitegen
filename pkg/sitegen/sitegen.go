@@ -289,6 +289,7 @@ func (sg SiteGen) parse(s *Source, t string) ([]byte, error) {
 	data["Source"] = s
 	data["BasePath"] = sg.BasePath
 	data["Today"] = time.Now().Format("2006-01-02")
+	data["Year"] = time.Now().Format("2006")
 
 	tplBuf := new(bytes.Buffer)
 	if err := target.Execute(tplBuf, data); err != nil {

@@ -108,7 +108,7 @@ custom_key: any value
 ---
 
 {{define "content"}}
-<h1>{{.Meta.title}}</h1>
+<h1>{{.title}}</h1>
 {{end}}
 ```
 
@@ -134,7 +134,10 @@ body { ... }
 | `serve`    | string | Shell command to run instead of copying the file (only in `-serve` dev mode) |
 | `build`    | string | Shell command to run instead of copying the file (only in production build mode) |
 
-All other frontmatter keys are accessible via `.Meta.<key>` in templates. **Important**: Multi-line string values MUST be quoted in YAML, otherwise parsing will fail.
+All other frontmatter keys are accessible at the root level (e.g., `.title`, `.date`) in templates. 
+**Note:** When looping over sources (e.g., using `range sources ...`), you are operating on a `*Source` object, so you must access frontmatter via `.Meta.<key>` instead of at the root.
+
+**Important**: Multi-line string values MUST be quoted in YAML, otherwise parsing will fail.
 
 ```yaml
 # ✅ Correct
@@ -179,7 +182,7 @@ template: main.html
 ---
 
 {{define "content"}}
-<h1>{{.Meta.title}}</h1>
+<h1>{{.title}}</h1>
 <p>About page content here.</p>
 {{end}}
 ```
@@ -189,8 +192,8 @@ template: main.html
 {{define "head"}}
 {{$site := data "site.json"}}
 <meta charset="utf-8">
-<title>{{if .Meta.title}}{{.Meta.title}} - {{end}}{{$site.title}}</title>
-<meta name="description" content="{{if .Meta.description}}{{.Meta.description}}{{else}}{{$site.description}}{{end}}">
+<title>{{if .title}}{{.title}} - {{end}}{{$site.title}}</title>
+<meta name="description" content="{{if .description}}{{.description}}{{else}}{{$site.description}}{{end}}">
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <link rel="stylesheet" href="{{.BasePath}}css/styles.css">
 {{end}}
@@ -216,12 +219,13 @@ All these variables are available in every template:
 
 | Variable     | Type              | Description |
 |--------------|-------------------|-------------|
-| `.Meta`      | `map[string]any`  | All YAML frontmatter key-value pairs |
-| `.Meta.title`| `any`             | Example: accessing the `title` frontmatter key |
+| `.<key>`       | `any`             | Frontmatter variables are available at the root (e.g., `.title` or `.date`) |
+| `.Source.Meta` | `map[string]any`  | The raw map of all YAML frontmatter key-value pairs |
 | `.Dev`       | `bool`            | `true` when running with `-serve` |
 | `.Source`    | `*Source`          | Current source object (has `.Name`, `.Local`, `.Path`, `.Ext`, `.CurrentPage`, `.TotalPages`) |
 | `.BasePath`  | `string`          | Configured base path (default `"/"`) |
 | `.Today`     | `string`          | Current date as `YYYY-MM-DD` |
+| `.Year`      | `string`          | Current year as `YYYY` |
 | `.Path`      | `string`          | Current page path (for parameterized/paginated pages) |
 | `.Page`      | `int`             | Current page number (pagination, 1-indexed) |
 | `.Pages`     | `int`             | Total number of pages (pagination) |
@@ -374,7 +378,7 @@ Serializes any value to a JSON string (safe for embedding in `<script>` tags).
 
 ```html
 <script>
-var config = {{ json .Meta }};
+var config = {{ json .Source.Meta }};
 </script>
 ```
 
@@ -528,8 +532,8 @@ See the non-HTML template parsing section above for a complete sitemap.xml examp
 ```html
 {{define "head"}}
 {{$site := data "site.json"}}
-<title>{{if .Meta.title}}{{.Meta.title}} - {{end}}{{$site.title}}</title>
-<meta name="description" content="{{if .Meta.description}}{{.Meta.description}}{{else}}{{$site.description}}{{end}}">
+<title>{{if .title}}{{.title}} - {{end}}{{$site.title}}</title>
+<meta name="description" content="{{if .description}}{{.description}}{{else}}{{$site.description}}{{end}}">
 {{end}}
 ```
 
@@ -577,8 +581,8 @@ template: main.html
 ---
 
 {{define "content"}}
-<h1>{{.Meta.title}}</h1>
-<p>Published on {{.Meta.date}}</p>
+<h1>{{.title}}</h1>
+<p>Published on {{.date}}</p>
 <p>Post content goes here...</p>
 <a href="{{.BasePath}}blog">← Back to Blog</a>
 {{end}}

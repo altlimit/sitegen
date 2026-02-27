@@ -111,12 +111,74 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.recentFiles = m.recentFiles[1:]
 		}
 	case errMsg:
-		m.errorMsg = string(msg)
+		m.errorMsg = formatErrorMsg(string(msg), m.sg.SitePath)
 		m.status = "Build failed"
 	case statusMsg:
 		m.status = string(msg)
 	}
 	return m, nil
+}
+
+func formatErrorMsg(errStr string, basePath string) string {
+	if errStr == "" {
+		return ""
+	}
+	if basePath != "" {
+		errStr = strings.ReplaceAll(errStr, basePath+string(os.PathSeparator), "")
+		errStr = strings.ReplaceAll(errStr, basePath, "")
+	}
+
+	return wrapText(errStr, 100)
+}
+
+func wrapText(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+	var result strings.Builder
+	var currentLineLen int
+
+	lines := strings.Split(s, "\n")
+	for lineIdx, line := range lines {
+		if lineIdx > 0 {
+			result.WriteString("\n")
+			currentLineLen = 0
+		}
+
+		words := strings.Split(line, " ")
+		for i, word := range words {
+			if currentLineLen+len(word) > limit && currentLineLen > 0 {
+				result.WriteString("\n")
+				currentLineLen = 0
+			}
+
+			if i > 0 && currentLineLen > 0 {
+				result.WriteString(" ")
+				currentLineLen++
+			}
+
+			if len(word) > limit {
+				for len(word) > 0 {
+					chunkSize := limit - currentLineLen
+					if chunkSize <= 0 {
+						result.WriteString("\n")
+						currentLineLen = 0
+						chunkSize = limit
+					}
+					if len(word) < chunkSize {
+						chunkSize = len(word)
+					}
+					result.WriteString(word[:chunkSize])
+					currentLineLen += chunkSize
+					word = word[chunkSize:]
+				}
+			} else {
+				result.WriteString(word)
+				currentLineLen += len(word)
+			}
+		}
+	}
+	return result.String()
 }
 
 func (m model) View() string {
@@ -279,7 +341,7 @@ func main() {
 		renderStats(stats)
 		if err != nil {
 			fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true).Render("Build errors:"))
-			fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render(err.Error()))
+			fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render(formatErrorMsg(err.Error(), sg.SitePath)))
 			os.Exit(1)
 		}
 		return
@@ -312,7 +374,7 @@ func main() {
 	go func() {
 		stats, err := sg.BuildAll(false)
 		if err != nil {
-			p.Send(statusMsg(fmt.Sprintf("Build failed: %v", err)))
+			p.Send(errMsg(fmt.Sprintf("Build failed: %v", err)))
 		} else {
 			p.Send(buildMsg{stats: stats, time: time.Now()})
 		}
@@ -415,7 +477,7 @@ func runWatcher(p *tea.Program, sg *sitegen.SiteGen, ss *server.StaticServer, ex
 					if buildAll {
 						s, err := sg.BuildAll(true)
 						if err != nil {
-							p.Send(statusMsg(fmt.Sprintf("BuildAll failed %v", err)))
+							p.Send(errMsg(fmt.Sprintf("BuildAll failed: %v", err)))
 						} else {
 							stats = s
 						}
@@ -426,7 +488,7 @@ func runWatcher(p *tea.Program, sg *sitegen.SiteGen, ss *server.StaticServer, ex
 					}
 					s, err := sg.BuildAll(true)
 					if err != nil {
-						p.Send(statusMsg(fmt.Sprintf("BuildAll failed %v", err)))
+						p.Send(errMsg(fmt.Sprintf("BuildAll failed: %v", err)))
 					} else {
 						stats = s
 					}
