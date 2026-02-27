@@ -8,7 +8,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/chai2010/webp"
+	"github.com/gen2brain/webp"
 	xdraw "golang.org/x/image/draw"
 )
 
@@ -73,7 +73,7 @@ func (sg *SiteGen) processImage(src []byte, pubPath string, ext string) error {
 		}
 		defer outWebp.Close()
 
-		err = webp.Encode(outWebp, img, &webp.Options{Lossless: false, Quality: 85})
+		err = webp.Encode(outWebp, img, webp.Options{Quality: 80})
 		if err != nil {
 			log.Println("failed to encode webp", webpPath, err)
 			return err
