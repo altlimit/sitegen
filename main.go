@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -611,7 +612,7 @@ func copySite(folder, target string) error {
 		return fmt.Errorf("copySite %s ReadDir error %v", folder, err)
 	}
 	for _, entry := range entries {
-		p := filepath.Join(folder, entry.Name())
+		p := path.Join(folder, entry.Name())
 		if entry.IsDir() {
 			if err := copySite(p, target); err != nil {
 				return err
