@@ -4,7 +4,7 @@
 <title>{{if .Title}}{{.Title}} - {{end}}{{if .Meta.title}}{{.Meta.title}} - {{end}}SiteGen</title>
 <meta name="description" content="{{if .Meta.description}}{{.Meta.description}}{{else}}{{$site.description}}{{end}}">
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<link rel="stylesheet" href="{{.BasePath}}css/styles.css">
+<link rel="stylesheet" href="{{.BasePath}}css/styles.css?v={{.BuildID}}">
 {{template "addHead" .}}
 {{end}}
 

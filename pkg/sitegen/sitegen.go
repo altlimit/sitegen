@@ -22,6 +22,7 @@ import (
 
 	"github.com/gobwas/glob"
 	"github.com/tdewolff/minify/v2"
+	"github.com/yuin/goldmark"
 )
 
 var (
@@ -49,6 +50,7 @@ type (
 		Webp        bool
 		Clean       bool
 		Dev         bool
+		BuildID     string
 
 		sources    map[string]*Source
 		genSources []*Source
@@ -290,6 +292,7 @@ func (sg SiteGen) parse(s *Source, t string) ([]byte, error) {
 	data["BasePath"] = sg.BasePath
 	data["Today"] = time.Now().Format("2006-01-02")
 	data["Year"] = time.Now().Format("2006")
+	data["BuildID"] = sg.BuildID
 
 	tplBuf := new(bytes.Buffer)
 	if err := target.Execute(tplBuf, data); err != nil {
@@ -325,9 +328,36 @@ func (sg *SiteGen) html(s *Source) ([]byte, error) {
 	return sg.parse(s, "html")
 }
 
+func (sg *SiteGen) markdown(s *Source) ([]byte, error) {
+	content := s.LoadContent()
+	if content == nil {
+		return nil, fmt.Errorf("failed to load content for %s", s.Local)
+	}
+	// Convert markdown to HTML
+	var buf bytes.Buffer
+	if err := goldmark.Convert(content, &buf); err != nil {
+		return nil, fmt.Errorf("markdown convert %s error %w", s.Local, err)
+	}
+	htmlContent := buf.String()
+	// Auto-wrap in {{define "block"}} if not already present
+	if !strings.Contains(string(content), "{{define") {
+		block := "content"
+		if b, ok := s.Meta["block"].(string); ok {
+			block = b
+		}
+		htmlContent = `{{define "` + block + `"}}` + htmlContent + `{{end}}`
+	}
+	// Replace the source content temporarily for template parsing
+	origContent := s.content
+	s.content = []byte(htmlContent)
+	result, err := sg.parse(s, "html")
+	s.content = origContent
+	return result, err
+}
+
 func (sg *SiteGen) sourcePath(s *Source) string {
 	switch s.Ext {
-	case ".html", ".htm":
+	case ".html", ".htm", ".md":
 		sDir := filepath.Join(sg.PublicPath, s.Path)
 		fName := "index.html"
 		if strings.HasSuffix(s.Path, ".html") || strings.HasSuffix(s.Path, ".htm") {
@@ -390,6 +420,8 @@ func (sg *SiteGen) Build(path string) error {
 			parser = sg.text
 		case "html":
 			parser = sg.html
+		case "markdown", "md":
+			parser = sg.markdown
 		}
 	} else {
 		switch s.Ext {
@@ -397,6 +429,8 @@ func (sg *SiteGen) Build(path string) error {
 			parser = sg.text
 		case ".html", ".htm":
 			parser = sg.html
+		case ".md":
+			parser = sg.markdown
 		}
 	}
 	if parser != nil {
@@ -483,6 +517,7 @@ func (sg *SiteGen) Build(path string) error {
 }
 
 func (sg *SiteGen) BuildAll(reload bool) (map[string]int, error) {
+	sg.BuildID = strconv.FormatInt(time.Now().Unix(), 10)
 	out := make(map[string]int)
 	if sg.Clean {
 		if err := os.RemoveAll(sg.PublicPath); err != nil {
@@ -539,7 +574,7 @@ func (sg *SiteGen) LocalToPath(s *Source) string {
 	} else {
 		path = strings.Replace(s.Local, filepath.Join(sg.SitePath, sg.SourceDir), "", 1)
 		switch s.Ext {
-		case ".html", ".htm":
+		case ".html", ".htm", ".md":
 			path = strings.TrimSuffix(path, s.Ext)
 			path = strings.TrimSuffix(path, "index")
 		}

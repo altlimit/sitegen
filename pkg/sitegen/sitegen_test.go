@@ -144,8 +144,8 @@ func TestSort(t *testing.T) {
 		order string
 		want  []string
 	}{
-		{"name", "desc", []string{"Home", "Features", "Blog"}},
-		{"name", "asc", []string{"Blog", "Features", "Home"}},
+		{"name", "desc", []string{"Home", "Features", "Blog", "About"}},
+		{"name", "asc", []string{"About", "Blog", "Features", "Home"}},
 	}
 	data := sg.Data("links.json")
 	// links.json is array of objects

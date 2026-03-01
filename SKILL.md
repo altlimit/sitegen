@@ -25,6 +25,7 @@ my-site/                  # -site flag (default: ./site)
 │   ├── img/
 │   │   └── logo.svg      # copied as-is
 │   ├── 404.html          # custom 404 page (needs path: 404.html in frontmatter)
+│   ├── about.md          # markdown page — auto-converted to /public/about/index.html
 │   └── sitemap.xml       # can use text templates with parse: text
 ├── templates/            # -templates flag (default: templates) — shared templates
 │   ├── main.html         # base layout template
@@ -133,6 +134,7 @@ body { ... }
 | `parse`    | string | Force template parsing for non-HTML files. Values: `text` or `html` |
 | `serve`    | string | Shell command to run instead of copying the file (only in `-serve` dev mode) |
 | `build`    | string | Shell command to run instead of copying the file (only in production build mode) |
+| `block`    | string | Template block name for `.md` auto-wrap (default: `content`) |
 
 All other frontmatter keys are accessible at the root level (e.g., `.title`, `.date`) in templates. 
 **Note:** When looping over sources (e.g., using `range sources ...`), you are operating on a `*Source` object, so you must access frontmatter via `.Meta.<key>` instead of at the root.
@@ -229,6 +231,7 @@ All these variables are available in every template:
 | `.Path`      | `string`          | Current page path (for parameterized/paginated pages) |
 | `.Page`      | `int`             | Current page number (pagination, 1-indexed) |
 | `.Pages`     | `int`             | Total number of pages (pagination) |
+| `.BuildID`   | `string`          | Unix timestamp string, regenerated on every build (useful for cache busting) |
 
 ## Template Functions Reference
 
@@ -490,6 +493,7 @@ When running with `-serve`:
 - **File watching**: Watches the site directory for changes (excludes `node_modules`, `bower_components` by default)
 - **Port auto-detection**: If the default port is busy, automatically finds the next available port
 - **Interactive TUI**: Shows build stats, server info, recent activity, and errors
+- **Full reload**: Press `r` in the terminal to clear caches and rebuild everything
 
 ## Minification
 
@@ -535,6 +539,50 @@ See the non-HTML template parsing section above for a complete sitemap.xml examp
 <title>{{if .title}}{{.title}} - {{end}}{{$site.title}}</title>
 <meta name="description" content="{{if .description}}{{.description}}{{else}}{{$site.description}}{{end}}">
 {{end}}
+```
+
+### Cache Busting with BuildID
+```html
+{{define "head"}}
+<link rel="stylesheet" href="{{.BasePath}}css/styles.css?v={{.BuildID}}">
+{{end}}
+```
+
+The `BuildID` value changes on every build, ensuring browsers fetch the latest assets.
+
+### Markdown Source Files
+
+Markdown (`.md`) files are natively supported. The markdown content is automatically converted to HTML and wrapped in `{{define "content"}}...{{end}}`, so you just write plain markdown with frontmatter.
+
+**`src/about.md`**:
+```markdown
+---
+title: About
+description: "Learn more about this site."
+template: main.html
+---
+
+# About
+
+This is a markdown page. **Bold**, *italic*, and [links](https://example.com) work.
+
+- Item one
+- Item two
+
+Template variables also work: Build **{{ .BuildID }}**
+```
+
+This generates `/about/index.html` using `main.html` as the layout, just like an `.html` source file. No `{{define "content"}}` or `parse: html` needed — it's automatic for `.md` files.
+
+To target a different template block, use the `block` frontmatter key:
+
+```markdown
+---
+template: main.html
+block: sidebar
+---
+
+This content will be wrapped in `{{define "sidebar"}}...{{end}}`.
 ```
 
 ### Full Pagination Example

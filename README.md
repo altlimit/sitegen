@@ -11,6 +11,7 @@ Sitegen is a simple, flexible, and fast static site generator written in Go. It 
 - 🚀 **Fast & Incremental**: Builds only what's needed.
 - 🔄 **Live Reload**: Built-in development server with changes detection.
 - 🎨 **Templating**: Flexible Go templates with custom functions.
+- 📝 **Markdown**: Write pages in `.md` with automatic HTML conversion.
 - 📦 **Zero Dependency**: Single binary, easy to install.
 - 🔧 **File Handlers**: Custom build commands for specific file types (e.g. CSS, JS).
 
@@ -90,6 +91,7 @@ Sitegen uses Go's `html/template` with extra helper functions.
 - `.Year`: Current year (YYYY).
 - `.Path`: Current page path (if parameterized).
 - `.Page`, `.Pages`: Pagination info.
+- `.BuildID`: Unix timestamp string, regenerated on every build (useful for cache busting).
 
 ### Basic Example
 

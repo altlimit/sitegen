@@ -98,6 +98,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+c" || msg.String() == "q" {
 			return m, tea.Quit
 		}
+		if msg.String() == "r" {
+			m.status = "Reloading..."
+			return m, func() tea.Msg {
+				m.sg.ClearCache()
+				stats, err := m.sg.BuildAll(true)
+				if err != nil {
+					return errMsg(fmt.Sprintf("Reload failed: %v", err))
+				}
+				m.srv.Notifier <- []byte("updated")
+				return buildMsg{stats: stats, time: time.Now()}
+			}
+		}
 	case buildMsg:
 		if len(msg.stats) > 0 {
 			m.stats = msg.stats
@@ -248,7 +260,7 @@ func (m model) View() string {
 		s.WriteString(statusStyle.Render(m.status) + "\n")
 	}
 
-	s.WriteString(statusStyle.Render("\nPress q or Ctrl+C to quit"))
+	s.WriteString(statusStyle.Render("\nPress r to reload | Press q or Ctrl+C to quit"))
 
 	return s.String()
 }
