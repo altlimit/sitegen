@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	_ "embed"
 	"flag"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/altlimit/sitegen/pkg/server"
+	"github.com/altlimit/sitegen/pkg/share"
 	"github.com/altlimit/sitegen/pkg/sitegen"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -72,6 +74,9 @@ type statusMsg string
 
 type errMsg string
 
+type shareMsg string
+type shareErrMsg string
+
 type model struct {
 	sg          *sitegen.SiteGen
 	stats       map[string]int
@@ -86,6 +91,8 @@ type model struct {
 	lastBuild   time.Time
 	recentFiles []string
 	errorMsg    string
+	shareURL    string
+	shareAuth   bool
 }
 
 func (m model) Init() tea.Cmd {
@@ -128,6 +135,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status = "Build failed"
 	case statusMsg:
 		m.status = string(msg)
+	case shareMsg:
+		m.shareURL = string(msg)
+		m.status = "Share tunnel connected"
+	case shareErrMsg:
+		m.shareURL = ""
+		m.status = "Share: " + string(msg)
 	}
 	return m, nil
 }
@@ -228,6 +241,14 @@ func (m model) View() string {
 			urlStyle.Render(m.serverURL),
 		)
 
+		if m.shareURL != "" {
+			shareLabel := m.shareURL
+			if m.shareAuth {
+				shareLabel = "🔒 " + shareLabel
+			}
+			infoContent += fmt.Sprintf("\n\nPublic: %s", urlStyle.Render(shareLabel))
+		}
+
 		if !m.lastBuild.IsZero() {
 			infoContent += fmt.Sprintf("\n\nLast Built: %s", m.lastBuild.Format("15:04:05"))
 		}
@@ -275,7 +296,10 @@ func main() {
 		port        string
 		basePath    string
 		exclude     string
+		shareAuth   string
+		shareServer string
 		create      bool
+		isShare     bool
 		serve       bool
 		clean       bool
 		isMinify    bool
@@ -301,6 +325,9 @@ func main() {
 	flag.BoolVar(&buildAll, "buildall", false, "Always build all on change")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.StringVar(&port, "port", "8888", "Port for localhost")
+	flag.BoolVar(&isShare, "share", false, "Enable public sharing")
+	flag.StringVar(&shareAuth, "share-auth", "", `Basic auth for share ("user:pass")`)
+	flag.StringVar(&shareServer, "share-server", "sitegen.dev:9443", "Share relay server address")
 	flag.Parse()
 
 	if showVersion {
@@ -379,6 +406,7 @@ func main() {
 		tplDir:     tplDir,
 		exclude:    exclude,
 		sourceDir:  sourceDir,
+		shareAuth:  shareAuth != "",
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
@@ -401,6 +429,28 @@ func main() {
 		http.Handle("/", ss)
 		http.ListenAndServe(fmt.Sprintf(":%s", port), nil)
 	}()
+
+	// Start share tunnel if enabled
+	if isShare {
+		go func() {
+			client := share.New(shareServer, ss, shareAuth)
+			ctx := context.Background()
+			client.RunWithReconnect(ctx, version,
+				func(subdomain string) {
+					url := fmt.Sprintf("https://%s.%s",
+						subdomain,
+						strings.TrimSuffix(strings.Split(shareServer, ":")[0], "/"),
+					)
+					p.Send(shareMsg(url))
+				},
+				func(err error) {
+					if err != nil {
+						p.Send(shareErrMsg(fmt.Sprintf("reconnecting... (%v)", err)))
+					}
+				},
+			)
+		}()
+	}
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)

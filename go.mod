@@ -1,6 +1,6 @@
 module github.com/altlimit/sitegen
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
@@ -22,6 +22,7 @@ require (
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/ebitengine/purego v0.8.3 // indirect
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
+	github.com/hashicorp/yamux v0.1.2 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
@@ -36,4 +37,5 @@ require (
 	github.com/yuin/goldmark v1.7.16 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
+	golang.org/x/time v0.15.0 // indirect
 )

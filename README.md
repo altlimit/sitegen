@@ -14,6 +14,7 @@ Sitegen is a simple, flexible, and fast static site generator written in Go. It 
 - 📝 **Markdown**: Write pages in `.md` with automatic HTML conversion.
 - 📦 **Zero Dependency**: Single binary, easy to install.
 - 🔧 **File Handlers**: Custom build commands for specific file types (e.g. CSS, JS).
+- 🌐 **Public Sharing**: Instantly share your dev server via a public URL (like ngrok, built-in).
 
 ## Installation
 
@@ -53,15 +54,18 @@ Download the latest release from the [Releases Page](https://github.com/altlimit
 sitegen [options]
 
 Options:
-  -create       Create a new site template
-  -site <path>  Root site path (default: "./site")
-  -serve        Start development server
-  -port <port>  Port for development server (default: "8888")
-  -clean        Clean public dir before build
-  -minify       Minify HTML/JS/CSS output
-  -public <dir> Public output directory (default: "./public")
-  -base <path>  Base URL path (default: "/")
-  -help         Show help
+  -create              Create a new site template
+  -site <path>         Root site path (default: "./site")
+  -serve               Start development server
+  -port <port>         Port for development server (default: "8888")
+  -clean               Clean public dir before build
+  -minify              Minify HTML/JS/CSS output
+  -public <dir>        Public output directory (default: "./public")
+  -base <path>         Base URL path (default: "/")
+  -share               Enable public sharing via sitegen.dev
+  -share-auth <u:p>    Basic auth for share ("user:pass")
+  -share-server <addr> Share relay server (default: "sitegen.dev:9443")
+  -help                Show help
 ```
 
 ## Template System
@@ -120,6 +124,24 @@ build: npm run build:prod:css
 ---
 */
 ```
+
+## Public Sharing
+
+Share your development server publicly with a single flag — no ngrok or third-party tunnels needed:
+
+```bash
+sitegen -serve -share
+```
+
+This creates a public URL like `https://<id>.sitegen.dev` that tunnels to your local dev server with hot reload support.
+
+To require a password:
+
+```bash
+sitegen -serve -share -share-auth "admin:secret"
+```
+
+The share tunnel only serves static files from your `public/` directory (GET/HEAD only) and reconnects automatically if the connection drops.
 
 ## Contributing
 
