@@ -1,9 +1,13 @@
-name: "latest-release"
+name: Release
 
 on:
   push:
     branches:
       - "master"
+    paths-ignore:
+      - "*.md"
+      - "site/**"
+      - ".agents/**"
 
 permissions:
   contents: write
@@ -11,12 +15,12 @@ permissions:
   id-token: write
 
 jobs:
-  latest-release:
-    name: "Latest Release"
+  release:
+    name: Release
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: "ubuntu-latest"
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -24,23 +28,50 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: "1.24"
 
-      - name: "Run tests"
+      - name: Run tests
         run: go test ./...
 
-      - name: "Build"
-        run: ./build.sh
+      - name: Set version
+        id: version
+        run: echo "VERSION=1.0.${{ github.run_number }}" >> $GITHUB_OUTPUT
+
+      - name: Build all platforms
         env:
-          VERSION: "v1.0.${{ github.run_number }}"
-      - uses: "marvinpinto/action-automatic-releases@latest"
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          LDFLAGS="-s -w -X main.version=${VERSION}"
+          mkdir -p dist
+
+          # Linux amd64
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/sitegen_linux_amd64 .
+          # Linux arm64
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/sitegen_linux_arm64 .
+          # macOS amd64
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/sitegen_darwin_amd64 .
+          # macOS arm64
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/sitegen_darwin_arm64 .
+          # Windows amd64
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/sitegen_windows_amd64.exe .
+
+      - name: Generate checksums
+        working-directory: dist
+        run: sha256sum * > checksums.txt
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
         with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "latest"
-          prerelease: false
-          title: "Latest Build"
+          tag_name: v${{ steps.version.outputs.VERSION }}
+          name: v${{ steps.version.outputs.VERSION }}
+          generate_release_notes: true
           files: |
-            ./build/*
+            dist/sitegen_linux_amd64
+            dist/sitegen_linux_arm64
+            dist/sitegen_darwin_amd64
+            dist/sitegen_darwin_arm64
+            dist/sitegen_windows_amd64.exe
+            dist/checksums.txt
 
       - name: Build site
         run: |
@@ -49,7 +80,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './public/sitegen'
+          path: "./public/sitegen"
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

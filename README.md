@@ -18,15 +18,27 @@ Sitegen is a simple, flexible, and fast static site generator written in Go. It 
 
 ## Installation
 
-### Unix/Linux/macOS
+Install via [alt](https://github.com/altlimit/alt) — a zero-config CLI distribution proxy for GitHub Releases:
 
 ```bash
-curl -s -S -L https://raw.githubusercontent.com/altlimit/sitegen/master/install.sh | bash
+# Install alt (one-time setup)
+curl -fsSL https://raw.githubusercontent.com/altlimit/alt/main/scripts/install.sh | sh
+
+# Install sitegen
+alt install altlimit/sitegen
 ```
 
-### Windows
+### Windows (PowerShell)
 
-Download the latest release from the [Releases Page](https://github.com/altlimit/sitegen/releases).
+```powershell
+# Install alt (one-time setup)
+powershell -Command "iwr https://raw.githubusercontent.com/altlimit/alt/main/scripts/install.ps1 -useb | iex"
+
+# Install sitegen
+alt install altlimit/sitegen
+```
+
+Or download binaries directly from the [Releases Page](https://github.com/altlimit/sitegen/releases).
 
 ## Quick Start
 
