@@ -2,6 +2,7 @@ package sitegen
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -17,6 +18,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	texttemplate "text/template"
 	"time"
 
@@ -51,6 +53,18 @@ type (
 		Clean       bool
 		Dev         bool
 		BuildID     string
+
+		// CmdTimeout bounds how long a serve:/build: frontmatter command may
+		// run. It runs while the build lock is held, so an unbounded command
+		// would freeze all rebuilds. Zero disables the timeout.
+		CmdTimeout time.Duration
+
+		// Mu serializes builds and source-map mutations. Callers that build or
+		// mutate sources (BuildAll, Build, NewSource, Remove, ClearCache from
+		// separate goroutines) must hold it. The low-level methods do NOT lock
+		// themselves to avoid re-entrant deadlocks (e.g. the "page" template
+		// func calls NewSource while a build is already in progress).
+		Mu sync.Mutex
 
 		sources    map[string]*Source
 		genSources []*Source
@@ -88,6 +102,7 @@ func NewSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath string, 
 		TplCache:    make(map[string]*texttemplate.Template),
 		Dev:         dev,
 		Webp:        webp,
+		CmdTimeout:  120 * time.Second,
 	}
 
 	// load all sources keyed by local path
@@ -167,7 +182,7 @@ func (sg *SiteGen) tplFuncs() map[string]interface{} {
 	}
 }
 
-func (sg SiteGen) parse(s *Source, t string) ([]byte, error) {
+func (sg *SiteGen) parse(s *Source, t string) ([]byte, error) {
 	content := s.LoadContent()
 	if content == nil {
 		return nil, fmt.Errorf("failed to load content for %s", s.Local)
@@ -202,7 +217,8 @@ func (sg SiteGen) parse(s *Source, t string) ([]byte, error) {
 	funcs["paginate"] = func(limit int, list interface{}) interface{} {
 		rv := reflect.ValueOf(list)
 		if rv.Kind() != reflect.Slice {
-			log.Println("paginate must be of type Slice got " + rv.Type().String())
+			log.Println("paginate: expected slice, got", rv.Kind())
+			return nil
 		}
 		if s.CurrentPage == 0 {
 			s.TotalPages = int(math.Ceil(float64(rv.Len()) / float64(limit)))
@@ -393,7 +409,15 @@ func (sg *SiteGen) Remove(path string) error {
 	return nil
 }
 
-func (sg *SiteGen) Build(path string) error {
+func (sg *SiteGen) Build(path string) (err error) {
+	// Recover from panics (e.g. a malformed template hitting a reflect call)
+	// so one bad source surfaces as a build error instead of crashing serve.
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("build panic for %s: %v", path, r)
+		}
+	}()
+
 	s, ok := sg.sources[path]
 	if !ok {
 		return fmt.Errorf("build failed for %s: not found", path)
@@ -482,11 +506,9 @@ func (sg *SiteGen) Build(path string) error {
 	} else {
 		if src != nil {
 			if serve, ok := s.Meta["serve"]; sg.Dev && ok {
-				runCommand(fmt.Sprint(serve))
-				return nil
+				return runCommand(fmt.Sprint(serve), sg.CmdTimeout)
 			} else if build, ok := s.Meta["build"]; !sg.Dev && ok {
-				runCommand(fmt.Sprint(build))
-				return nil
+				return runCommand(fmt.Sprint(build), sg.CmdTimeout)
 			} else if sg.Minify != nil && (s.Ext == ".js" || s.Ext == ".css") {
 				if _, ok := parseCtype[s.Ctype]; ok {
 					b, err := sg.Minify.Bytes(s.Ctype, src)
@@ -615,22 +637,31 @@ func isDirEmpty(name string) (bool, error) {
 	return false, err
 }
 
-func runCommand(run string) {
+func runCommand(run string, timeout time.Duration) error {
 	c := strings.Split(run, " ")
-	if len(c) == 0 {
-		return
+	if len(c) == 0 || c[0] == "" {
+		return nil
 	}
-	cmd := exec.Command(c[0], c[1:]...)
+	ctx := context.Background()
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+	cmd := exec.CommandContext(ctx, c[0], c[1:]...)
 	stdout, err := cmd.Output()
+	if ctx.Err() == context.DeadlineExceeded {
+		return fmt.Errorf("command %q timed out after %s", run, timeout)
+	}
 	if err != nil {
-		log.Println(err.Error())
-		return
+		return fmt.Errorf("command %q failed: %w", run, err)
 	}
 	out := string(stdout)
 	if out == "" {
 		out = run
 	}
 	log.Println(strings.Trim(out, "\n"))
+	return nil
 }
 
 func fileExt(p string) string {
@@ -668,7 +699,8 @@ func contains(sub, s string) bool {
 func sortBy(prop string, order string, list interface{}) (result []interface{}) {
 	rv := reflect.ValueOf(list)
 	if rv.Kind() != reflect.Slice {
-		log.Println("sort must be of type Slice got " + rv.Type().String())
+		log.Println("sort: expected slice, got", rv.Kind())
+		return
 	}
 
 	sorted := reflect.MakeSlice(rv.Type(), rv.Len(), rv.Len())
@@ -717,7 +749,8 @@ func valueOf(key string, a reflect.Value) string {
 func filterBy(prop string, pattern string, list interface{}) (result []interface{}) {
 	rv := reflect.ValueOf(list)
 	if rv.Kind() != reflect.Slice {
-		log.Println("sort must be of type Slice got " + rv.Type().String())
+		log.Println("filter: expected slice, got", rv.Kind())
+		return
 	}
 
 	for i := 0; i < rv.Len(); i++ {
@@ -744,7 +777,8 @@ func mapToList(d map[string]interface{}) (result []kv) {
 func limit(limit int, list interface{}) interface{} {
 	rv := reflect.ValueOf(list)
 	if rv.Kind() != reflect.Slice {
-		log.Println("sort must be of type Slice got " + rv.Type().String())
+		log.Println("limit: expected slice, got", rv.Kind())
+		return nil
 	}
 
 	if limit >= rv.Len() {
@@ -756,7 +790,8 @@ func limit(limit int, list interface{}) interface{} {
 func offset(offset int, list interface{}) interface{} {
 	rv := reflect.ValueOf(list)
 	if rv.Kind() != reflect.Slice {
-		log.Println("sort must be of type Slice got " + rv.Type().String())
+		log.Println("offset: expected slice, got", rv.Kind())
+		return nil
 	}
 
 	if offset >= rv.Len() {

@@ -72,6 +72,7 @@ Options:
   -port <port>         Port for development server (default: "8888")
   -clean               Clean public dir before build
   -minify              Minify HTML/JS/CSS output
+  -cmd-timeout <secs>  Timeout for serve/build frontmatter commands (default: 120, 0 disables)
   -public <dir>        Public output directory (default: "./public")
   -base <path>         Base URL path (default: "/")
   -share               Enable public sharing via sitegen.dev

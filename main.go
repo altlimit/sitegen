@@ -35,7 +35,6 @@ import (
 )
 
 var (
-	cmdWG   sync.WaitGroup
 	version = "dev"
 
 	// Styles
@@ -77,6 +76,19 @@ type errMsg string
 type shareMsg string
 type shareErrMsg string
 
+// teaLogWriter forwards standard-logger output into the TUI as status
+// messages so it never writes to the alt-screen directly.
+type teaLogWriter struct {
+	p *tea.Program
+}
+
+func (w teaLogWriter) Write(b []byte) (int, error) {
+	if s := strings.TrimSpace(string(b)); s != "" {
+		w.p.Send(statusMsg(s))
+	}
+	return len(b), nil
+}
+
 type model struct {
 	sg          *sitegen.SiteGen
 	stats       map[string]int
@@ -107,9 +119,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.String() == "r" {
 			m.status = "Reloading..."
-			return m, func() tea.Msg {
+			return m, func() (msg tea.Msg) {
+				defer func() {
+					if r := recover(); r != nil {
+						msg = errMsg(fmt.Sprintf("Reload panic: %v", r))
+					}
+				}()
+				m.sg.Mu.Lock()
 				m.sg.ClearCache()
 				stats, err := m.sg.BuildAll(true)
+				m.sg.Mu.Unlock()
 				if err != nil {
 					return errMsg(fmt.Sprintf("Reload failed: %v", err))
 				}
@@ -305,6 +324,7 @@ func main() {
 		isMinify    bool
 		isWebp      bool
 		buildAll    bool
+		cmdTimeout  int
 		showVersion bool
 		min         *minify.M
 		ss          *server.StaticServer
@@ -323,6 +343,7 @@ func main() {
 	flag.BoolVar(&isMinify, "minify", false, "Minify (HTML|JS|CSS)")
 	flag.BoolVar(&isWebp, "webp", false, "Generate WebP optimized images")
 	flag.BoolVar(&buildAll, "buildall", false, "Always build all on change")
+	flag.IntVar(&cmdTimeout, "cmd-timeout", 120, "Timeout in seconds for serve/build frontmatter commands (0 disables)")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.StringVar(&port, "port", "8888", "Port for localhost")
 	flag.BoolVar(&isShare, "share", false, "Enable public sharing")
@@ -373,6 +394,7 @@ func main() {
 		basePath = "/" + strings.Trim(basePath, "/") + "/"
 	}
 	sg = sitegen.NewSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath, min, clean, serve, isWebp)
+	sg.CmdTimeout = time.Duration(cmdTimeout) * time.Second
 
 	// Single run
 	if !serve {
@@ -411,9 +433,22 @@ func main() {
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
+	// Route the standard logger into the TUI. Many helpers log warnings via
+	// log.Println; writing them to stdout/stderr corrupts the alt-screen, so
+	// surface them as status lines instead.
+	log.SetOutput(teaLogWriter{p: p})
+	log.SetFlags(0)
+
 	// Build initial
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				p.Send(errMsg(fmt.Sprintf("Build panic: %v", r)))
+			}
+		}()
+		sg.Mu.Lock()
 		stats, err := sg.BuildAll(false)
+		sg.Mu.Unlock()
 		if err != nil {
 			p.Send(errMsg(fmt.Sprintf("Build failed: %v", err)))
 		} else {
@@ -463,11 +498,25 @@ func runWatcher(p *tea.Program, sg *sitegen.SiteGen, ss *server.StaticServer, ex
 	var mu sync.Mutex
 	events := make(map[string]bool)
 	if err != nil {
-		log.Fatalln("Watcher error", err)
+		// Live reload can't start, but keep serving static files.
+		p.Send(errMsg(fmt.Sprintf("Watcher init failed (live reload disabled): %v", err)))
+		return
 	}
 	defer watcher.Close()
 
 	processKey := func(key string) {
+		// Always release the dedupe key (so future edits to this file rebuild)
+		// and recover from any panic so a single bad build can't take down
+		// serve or the TUI.
+		defer func() {
+			mu.Lock()
+			delete(events, key)
+			mu.Unlock()
+			if r := recover(); r != nil {
+				p.Send(errMsg(fmt.Sprintf("recovered from build panic: %v", r)))
+			}
+		}()
+
 		action := key[:3]
 		path := key[4:]
 		pp, err := filepath.Abs(path)
@@ -482,7 +531,14 @@ func runWatcher(p *tea.Program, sg *sitegen.SiteGen, ss *server.StaticServer, ex
 
 		stats := map[string]int{}
 
-		if err == nil && fi.IsDir() {
+		// Serialize all source-map and build access; concurrent processKey
+		// goroutines would otherwise race the sources map (an unrecoverable
+		// fatal). Wrapped in a func so the lock is released (even on panic)
+		// before the notifier/buildMsg sends below.
+		func() {
+			sg.Mu.Lock()
+			defer sg.Mu.Unlock()
+			if err == nil && fi.IsDir() {
 			if action == "add" {
 				if !excluded(exclude, strings.Replace(pp, sg.SitePath+string(os.PathSeparator), "", 1)) {
 					if err := watcher.Add(pp); err != nil {
@@ -558,10 +614,7 @@ func runWatcher(p *tea.Program, sg *sitegen.SiteGen, ss *server.StaticServer, ex
 				}
 			}
 		}
-		mu.Lock()
-		delete(events, key)
-		mu.Unlock()
-		cmdWG.Wait()
+		}()
 		ss.Notifier <- []byte("updated")
 
 		// Send build message to update timestamp, even if stats are empty
@@ -582,8 +635,11 @@ func runWatcher(p *tea.Program, sg *sitegen.SiteGen, ss *server.StaticServer, ex
 					op = "add"
 				}
 				if op != "" {
+					// Skip dotfiles (editor temp files, .git, scratch files).
+					// Must `continue`, not `return`: returning would kill the
+					// whole event loop and silently stop live reload.
 					if n := strings.Split(event.Name, string(os.PathSeparator)); strings.HasPrefix(n[len(n)-1], ".") {
-						return
+						continue
 					}
 					b := false
 					mu.Lock()
@@ -607,21 +663,21 @@ func runWatcher(p *tea.Program, sg *sitegen.SiteGen, ss *server.StaticServer, ex
 	}()
 
 	if err = watcher.Add(sg.SitePath); err != nil {
-		log.Fatalln("Watch dir ", tplDir, " error ", err)
+		p.Send(statusMsg(fmt.Sprintf("Watch dir %s error %v", sg.SitePath, err)))
 	}
 
 	filepath.Walk(sg.SitePath,
 		func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				log.Fatal("watch dir", path, "error", err)
+			// Skip unreadable/removed paths (e.g. a dir deleted mid-walk
+			// during bulk edits) instead of crashing the process.
+			if err != nil || info == nil {
+				return nil
 			}
 			if info.IsDir() && !strings.HasPrefix(path, sg.PublicPath) {
 				if !excluded(exclude, strings.Replace(path, sg.SitePath+string(os.PathSeparator), "", 1)) {
-					err = watcher.Add(path)
-					if err != nil {
-						log.Fatal("watch dir", path, "error", err)
+					if err := watcher.Add(path); err != nil {
+						p.Send(statusMsg(fmt.Sprintf("Watch dir %s error %v", path, err)))
 					}
-					return nil
 				}
 			}
 			return nil
