@@ -193,6 +193,16 @@ func (sg *SiteGen) parse(s *Source, t string) ([]byte, error) {
 	}
 
 	funcs := sg.tplFuncs()
+	// Mark this source as an aggregator when it lists/loads other content, so
+	// the watcher knows to rebuild it when any content changes.
+	funcs["sources"] = func(prop, pattern string) []*Source {
+		s.dynamic = true
+		return sg.GetSources(prop, pattern)
+	}
+	funcs["data"] = func(name string) interface{} {
+		s.dynamic = true
+		return sg.Data(name)
+	}
 	funcs["page"] = func(source, path string) string {
 		var sp *Source
 		for i := range sg.genSources {
@@ -300,6 +310,10 @@ func (sg *SiteGen) parse(s *Source, t string) ([]byte, error) {
 	for k, v := range s.Meta {
 		data[k] = v
 	}
+	// Expose the full frontmatter map as .Meta too, so templates can use
+	// .Meta.title at the page root just like they do for sources in a loop
+	// (.Meta.<key>). Individual keys remain flattened at the root as well.
+	data["Meta"] = s.Meta
 	data["Path"] = s.path
 	data["Page"] = s.CurrentPage
 	data["Pages"] = s.TotalPages
@@ -536,6 +550,33 @@ func (sg *SiteGen) Build(path string) (err error) {
 		}
 	}
 	return nil
+}
+
+// BuildDependents rebuilds every registered source that aggregated other
+// content (via the sources/data funcs) during a previous render — i.e. listing
+// pages — excluding the path that was just built. This lets adding, editing, or
+// removing one source update the pages that list it, without a full rebuild.
+// The caller must hold sg.Mu. Returns the number of pages rebuilt.
+func (sg *SiteGen) BuildDependents(except string) (int, error) {
+	var paths []string
+	for p, s := range sg.sources {
+		if s.dynamic && p != except {
+			paths = append(paths, p)
+		}
+	}
+	count := 0
+	for _, p := range paths {
+		if s, ok := sg.sources[p]; ok {
+			// Reset cached content + pagination state so the listing re-queries
+			// the (now changed) source set on rebuild.
+			s.ReloadContent()
+		}
+		if err := sg.Build(p); err != nil {
+			return count, err
+		}
+		count++
+	}
+	return count, nil
 }
 
 func (sg *SiteGen) BuildAll(reload bool) (map[string]int, error) {

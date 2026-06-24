@@ -23,6 +23,12 @@ type Source struct {
 	TotalPages  int
 	path        string
 	Err         error
+
+	// dynamic is set during render when this source aggregates other content
+	// via the sources/data template funcs (i.e. a listing page). The watcher
+	// rebuilds such pages when any content changes, so e.g. adding a blog post
+	// updates the blog index without a full reload.
+	dynamic bool
 }
 
 func (s *Source) ReloadContent() []byte {

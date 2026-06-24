@@ -1,32 +1,23 @@
 ---
-template: main.html
+template: page.html
+blocks:
+  - type: hero
+    heading: "Static Sites, Simply."
+    text: "A fast, flexible, and zero-dependency static site generator written in Go."
+    button_label: "Explore Features"
+    button_link: "features"
+  - type: card_grid
+    cards:
+      - icon: "🚀"
+        heading: "Fast & Incremental"
+        text: "Builds only what's needed. Smart caching ensures lightning fast rebuilds during development."
+      - icon: "🔄"
+        heading: "Live Reload"
+        text: "Built-in development server that detects changes and refreshes your browser instantly."
+      - icon: "🎨"
+        heading: "Powerful Templating"
+        text: "Leverage Go's text/template engine with custom helpers for data, sorting, and pagination."
+      - icon: "🌐"
+        heading: "Public Sharing"
+        text: "Instantly share your dev server via a public URL with <code>-share</code>. No ngrok needed."
 ---
-
-{{define "content"}}
-
-<div class="hero">
-    <h1>Static Sites, Simply.</h1>
-    <p>A fast, flexible, and zero-dependency static site generator written in Go.</p>
-    <a href="{{.BasePath}}features" class="btn">Explore Features</a>
-</div>
-
-<div class="grid">
-    <div class="card">
-        <h3>🚀 Fast & Incremental</h3>
-        <p>Builds only what's needed. Smart caching ensures lightning fast rebuilds during development.</p>
-    </div>
-    <div class="card">
-        <h3>🔄 Live Reload</h3>
-        <p>Built-in development server that detects changes and refreshes your browser instantly.</p>
-    </div>
-    <div class="card">
-        <h3>🎨 Powerful Templating</h3>
-        <p>Leverage Go's text/template engine with custom helpers for data, sorting, and pagination.</p>
-    </div>
-    <div class="card">
-        <h3>🌐 Public Sharing</h3>
-        <p>Instantly share your dev server via a public URL with <code>-share</code>. No ngrok needed.</p>
-    </div>
-</div>
-
-{{end}}

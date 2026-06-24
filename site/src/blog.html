@@ -7,7 +7,7 @@ template: main.html
 <h1>Blog</h1>
 <p>Example of pagination (2 posts per page).</p>
 
-{{ $posts := sort "Meta.date" "desc" (sources "RelPath" "blog/*.html") }}
+{{ $posts := sort "Meta.date" "desc" (sources "RelPath" "blog/*") }}
 
 {{ $paginated := paginate 2 $posts }}
 

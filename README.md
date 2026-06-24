@@ -15,6 +15,7 @@ Sitegen is a simple, flexible, and fast static site generator written in Go. It 
 - 📦 **Zero Dependency**: Single binary, easy to install.
 - 🔧 **File Handlers**: Custom build commands for specific file types (e.g. CSS, JS).
 - 🌐 **Public Sharing**: Instantly share your dev server via a public URL (like ngrok, built-in).
+- ✏️ **Built-in CMS**: Optional `-cms` editing UI for non-technical editors — block builder, collections, data files, and image uploads, writing the same source files. See [docs/CMS.md](docs/CMS.md).
 
 ## Installation
 
@@ -78,6 +79,8 @@ Options:
   -share               Enable public sharing via sitegen.dev
   -share-auth <u:p>    Basic auth for share ("user:pass")
   -share-server <addr> Share relay server (default: "sitegen.dev:9443")
+  -cms                 Enable the built-in editing UI at /__cms (serve mode)
+  -cms-auth <u:p>      Basic auth for the CMS ("user:pass")
   -help                Show help
 ```
 
@@ -155,6 +158,26 @@ sitegen -serve -share -share-auth "admin:secret"
 ```
 
 The share tunnel only serves static files from your `public/` directory (GET/HEAD only) and reconnects automatically if the connection drops.
+
+## Built-in CMS
+
+A built-in editing UI lets non-technical editors (marketing, writers) edit your
+content without touching code or git. It reads and writes the **same source
+files** the generator already consumes (`src/*` and `data/*.json`) — no database,
+no separate content store, so git history and templates keep working.
+
+```bash
+sitegen -serve -cms                       # editor at http://localhost:8888/__cms
+sitegen -serve -cms -cms-auth "me:secret" # require a password
+```
+
+Without any config it works in **raw mode** (list source files, edit frontmatter
++ body). Add an optional `site/cms.yaml` to get typed widgets, a block builder,
+folder collections with a "+ New" button, editable data files, and image
+uploads. The save → rebuild → live-reload loop runs through the normal pipeline,
+and the preview pane follows the page you're editing.
+
+See **[docs/CMS.md](docs/CMS.md)** for the full `cms.yaml` reference.
 
 ## Contributing
 

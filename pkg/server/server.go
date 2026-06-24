@@ -41,9 +41,19 @@ type StaticServer struct {
 	newClients     chan chan []byte
 	closingClients chan chan []byte
 	clients        map[chan []byte]bool
+
+	// CMS (dev-only) — set when the -cms flag is enabled.
+	CMSEnabled bool
+	SrcDir     string // absolute path to the site source directory
+	DataDir    string // absolute path to the site data directory
+	CMSAuth    string // "user:pass" for basic auth, or "" for none
 }
 
 func (ss *StaticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if ss.CMSEnabled && strings.HasPrefix(r.URL.Path, "/__cms") {
+		ss.serveCMS(w, r)
+		return
+	}
 	if r.URL.Path == "/__hotreload" {
 		flusher, ok := w.(http.Flusher)
 		if !ok {

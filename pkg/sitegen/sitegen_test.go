@@ -3,9 +3,63 @@ package sitegen
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestBuildDependentsRebuildsListingOnNewEntry(t *testing.T) {
+	site := t.TempDir()
+	pub := t.TempDir()
+	mk := func(rel, content string) {
+		full := filepath.Join(site, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk("templates/main.html", `<html><body>{{template "content" .}}</body></html>`)
+	mk("src/blog.html", "---\ntemplate: main.html\n---\n"+
+		`{{define "content"}}{{range sources "RelPath" "blog/*"}}[{{.Meta.title}}]{{end}}{{end}}`)
+	mk("src/blog/one.md", "---\ntitle: One\ntemplate: main.html\n---\n# One")
+
+	sg := NewSiteGen(site, "templates", "data", "src", pub, "/", nil, false, true, false)
+	if _, err := sg.BuildAll(false); err != nil {
+		t.Fatal(err)
+	}
+
+	blogAbs, _ := filepath.Abs(filepath.Join(site, "src", "blog.html"))
+	if s, ok := sg.sources[blogAbs]; !ok || !s.dynamic {
+		t.Fatalf("blog.html should be marked dynamic (uses sources); ok=%v", ok)
+	}
+	listing := filepath.Join(pub, "blog", "index.html")
+	if b, _ := os.ReadFile(listing); !strings.Contains(string(b), "[One]") || strings.Contains(string(b), "[Two]") {
+		t.Fatalf("initial listing wrong:\n%s", b)
+	}
+
+	// Add a new post the same way the watcher does, then rebuild dependents only.
+	mk("src/blog/two.md", "---\ntitle: Two\ntemplate: main.html\n---\n# Two")
+	twoAbs, _ := filepath.Abs(filepath.Join(site, "src", "blog", "two.md"))
+	if _, err := sg.NewSource(twoAbs, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := sg.Build(twoAbs); err != nil {
+		t.Fatal(err)
+	}
+	n, err := sg.BuildDependents(twoAbs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n < 1 {
+		t.Fatalf("expected at least one dependent rebuilt, got %d", n)
+	}
+	if b, _ := os.ReadFile(listing); !strings.Contains(string(b), "[Two]") {
+		t.Errorf("listing did not pick up the new entry without a full rebuild:\n%s", b)
+	}
+}
 
 func testSiteGen() *SiteGen {
 	return NewSiteGen("../../site", "templates", "data", "src", "./public", "/", nil, true, true, false)

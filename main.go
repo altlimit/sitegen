@@ -105,6 +105,7 @@ type model struct {
 	errorMsg    string
 	shareURL    string
 	shareAuth   bool
+	cmsURL      string
 }
 
 func (m model) Init() tea.Cmd {
@@ -260,6 +261,10 @@ func (m model) View() string {
 			urlStyle.Render(m.serverURL),
 		)
 
+		if m.cmsURL != "" {
+			infoContent += fmt.Sprintf("\n\nCMS: %s", urlStyle.Render(m.cmsURL))
+		}
+
 		if m.shareURL != "" {
 			shareLabel := m.shareURL
 			if m.shareAuth {
@@ -326,6 +331,8 @@ func main() {
 		buildAll    bool
 		cmdTimeout  int
 		showVersion bool
+		cms         bool
+		cmsAuth     string
 		min         *minify.M
 		ss          *server.StaticServer
 		sg          *sitegen.SiteGen
@@ -349,6 +356,8 @@ func main() {
 	flag.BoolVar(&isShare, "share", false, "Enable public sharing")
 	flag.StringVar(&shareAuth, "share-auth", "", `Basic auth for share ("user:pass")`)
 	flag.StringVar(&shareServer, "share-server", "sitegen.dev:9443", "Share relay server address")
+	flag.BoolVar(&cms, "cms", false, "Enable the built-in editing UI at /__cms (serve mode)")
+	flag.StringVar(&cmsAuth, "cms-auth", "", `Basic auth for the CMS ("user:pass")`)
 	flag.Parse()
 
 	if showVersion {
@@ -417,6 +426,20 @@ func main() {
 	}
 
 	ss = server.NewStaticServer(pubPath, basePath)
+	if cms {
+		ss.CMSEnabled = true
+		ss.CMSAuth = cmsAuth
+		if abs, err := filepath.Abs(filepath.Join(sitePath, sourceDir)); err == nil {
+			ss.SrcDir = abs
+		} else {
+			ss.SrcDir = filepath.Join(sitePath, sourceDir)
+		}
+		if abs, err := filepath.Abs(filepath.Join(sitePath, dataDir)); err == nil {
+			ss.DataDir = abs
+		} else {
+			ss.DataDir = filepath.Join(sitePath, dataDir)
+		}
+	}
 	serverURL := fmt.Sprintf("http://localhost:%s%s", port, basePath)
 
 	m := model{
@@ -429,6 +452,9 @@ func main() {
 		exclude:    exclude,
 		sourceDir:  sourceDir,
 		shareAuth:  shareAuth != "",
+	}
+	if cms {
+		m.cmsURL = fmt.Sprintf("http://localhost:%s/__cms", port)
 	}
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
@@ -539,35 +565,50 @@ func runWatcher(p *tea.Program, sg *sitegen.SiteGen, ss *server.StaticServer, ex
 			sg.Mu.Lock()
 			defer sg.Mu.Unlock()
 			if err == nil && fi.IsDir() {
-			if action == "add" {
-				if !excluded(exclude, strings.Replace(pp, sg.SitePath+string(os.PathSeparator), "", 1)) {
-					if err := watcher.Add(pp); err != nil {
-						p.Send(statusMsg(fmt.Sprintf("Watch dir %s error %v", pp, err)))
+				if action == "add" {
+					if !excluded(exclude, strings.Replace(pp, sg.SitePath+string(os.PathSeparator), "", 1)) {
+						if err := watcher.Add(pp); err != nil {
+							p.Send(statusMsg(fmt.Sprintf("Watch dir %s error %v", pp, err)))
+						}
+					}
+				} else {
+					if err := watcher.Remove(pp); err != nil {
+						p.Send(statusMsg(fmt.Sprintf("Watch stop dir %s error %v", pp, err)))
 					}
 				}
 			} else {
-				if err := watcher.Remove(pp); err != nil {
-					p.Send(statusMsg(fmt.Sprintf("Watch stop dir %s error %v", pp, err)))
-				}
-			}
-		} else {
-			rp := strings.Replace(pp, sg.SitePath, "", 1)
-			isSrc := strings.HasPrefix(rp, string(os.PathSeparator)+sourceDir)
-			switch action {
-			case "add":
-				if isSrc {
-					p.Send(fileMsg{path: rp, action: "add"})
-					if _, err := sg.NewSource(pp, false); err != nil {
-						p.Send(statusMsg(fmt.Sprintf("%s failed source %v", path, err)))
-					}
+				rp := strings.Replace(pp, sg.SitePath, "", 1)
+				isSrc := strings.HasPrefix(rp, string(os.PathSeparator)+sourceDir)
+				switch action {
+				case "add":
+					if isSrc {
+						p.Send(fileMsg{path: rp, action: "add"})
+						if _, err := sg.NewSource(pp, false); err != nil {
+							p.Send(statusMsg(fmt.Sprintf("%s failed source %v", path, err)))
+						}
 
-					if err := sg.Build(pp); err != nil {
-						p.Send(errMsg(fmt.Sprintf("Build failed %s: %v", pp, err)))
+						if err := sg.Build(pp); err != nil {
+							p.Send(errMsg(fmt.Sprintf("Build failed %s: %v", pp, err)))
+						} else {
+							// handled by fileMsg
+						}
+
+						if buildAll {
+							s, err := sg.BuildAll(true)
+							if err != nil {
+								p.Send(errMsg(fmt.Sprintf("BuildAll failed: %v", err)))
+							} else {
+								stats = s
+							}
+						} else if _, err := sg.BuildDependents(pp); err != nil {
+							// Rebuild listing pages so they pick up the new/edited
+							// content (e.g. a blog index showing a new post).
+							p.Send(errMsg(fmt.Sprintf("Rebuild dependents failed: %v", err)))
+						}
 					} else {
-						// handled by fileMsg
-					}
-
-					if buildAll {
+						if strings.HasPrefix(rp, string(os.PathSeparator)+tplDir) {
+							sg.ClearCache()
+						}
 						s, err := sg.BuildAll(true)
 						if err != nil {
 							p.Send(errMsg(fmt.Sprintf("BuildAll failed: %v", err)))
@@ -575,25 +616,27 @@ func runWatcher(p *tea.Program, sg *sitegen.SiteGen, ss *server.StaticServer, ex
 							stats = s
 						}
 					}
-				} else {
-					if strings.HasPrefix(rp, string(os.PathSeparator)+tplDir) {
-						sg.ClearCache()
-					}
-					s, err := sg.BuildAll(true)
-					if err != nil {
-						p.Send(errMsg(fmt.Sprintf("BuildAll failed: %v", err)))
+				case "del":
+					if isSrc {
+						if err := sg.Remove(pp); err != nil {
+							p.Send(statusMsg(fmt.Sprintf("Remove failed %s error %v", pp, err)))
+						} else {
+							p.Send(fileMsg{path: rp, action: "del"})
+						}
+						if buildAll {
+							s, err := sg.BuildAll(true)
+							if err != nil {
+								p.Send(errMsg(fmt.Sprintf("BuildAll failed: %v", err)))
+							} else {
+								stats = s
+							}
+						} else if _, err := sg.BuildDependents(pp); err != nil {
+							p.Send(errMsg(fmt.Sprintf("Rebuild dependents failed: %v", err)))
+						}
 					} else {
-						stats = s
-					}
-				}
-			case "del":
-				if isSrc {
-					if err := sg.Remove(pp); err != nil {
-						p.Send(statusMsg(fmt.Sprintf("Remove failed %s error %v", pp, err)))
-					} else {
-						p.Send(fileMsg{path: rp, action: "del"})
-					}
-					if buildAll {
+						if strings.HasPrefix(rp, string(os.PathSeparator)+tplDir) {
+							sg.ClearCache()
+						}
 						s, err := sg.BuildAll(true)
 						if err != nil {
 							p.Send(errMsg(fmt.Sprintf("BuildAll failed: %v", err)))
@@ -601,19 +644,8 @@ func runWatcher(p *tea.Program, sg *sitegen.SiteGen, ss *server.StaticServer, ex
 							stats = s
 						}
 					}
-				} else {
-					if strings.HasPrefix(rp, string(os.PathSeparator)+tplDir) {
-						sg.ClearCache()
-					}
-					s, err := sg.BuildAll(true)
-					if err != nil {
-						p.Send(errMsg(fmt.Sprintf("BuildAll failed: %v", err)))
-					} else {
-						stats = s
-					}
 				}
 			}
-		}
 		}()
 		ss.Notifier <- []byte("updated")
 

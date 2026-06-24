@@ -1,0 +1,63 @@
+# Optional CMS schema. Without this file the editor still works by inferring
+# fields from a page's existing blocks; with it, the editor offers typed widgets
+# and an "add block -> pick type" menu. See ROADMAP.md.
+
+# Folder collections: many entries = files under src/<folder>. The editor shows
+# a "+ New" button per collection and a typed create form.
+collections:
+  - name: blog
+    label: Blog Post
+    folder: blog
+    extension: md
+    slug: "{{title}}"
+    fields:
+      - { name: title, widget: string }
+      - { name: date, widget: date }
+      - { name: summary, widget: text }
+      - { name: template, widget: hidden, default: main.html }
+      - { name: body, widget: markdown }
+
+# Data files: typed editing of data/*.json. A single object, or a list when
+# the file holds a JSON array.
+data:
+  - name: site
+    label: Site Settings
+    file: site.json
+    fields:
+      - { name: title, widget: string }
+      - { name: description, widget: text }
+      - { name: url, widget: string }
+  - name: nav
+    label: Navigation
+    file: links.json
+    list: true
+    fields:
+      - { name: name, widget: string }
+      - { name: path, widget: string }
+
+blocks:
+  - type: hero
+    label: Hero
+    fields:
+      - { name: heading, widget: string }
+      - { name: text, widget: text }
+      - { name: button_label, widget: string }
+      - { name: button_link, widget: string }
+  - type: card_grid
+    label: Card Grid
+    fields:
+      - name: cards
+        widget: list
+        fields:
+          - { name: icon, widget: string }
+          - { name: heading, widget: string }
+          - { name: text, widget: text }
+  - type: rich_text
+    label: Rich Text
+    fields:
+      - { name: body, widget: text }
+  - type: image
+    label: Image
+    fields:
+      - { name: src, widget: image }
+      - { name: alt, widget: string }

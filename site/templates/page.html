@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    {{ template "head" . }}
+</head>
+
+<body>
+    {{ template "nav" . }}
+
+    <main>
+        <div class="container">
+            {{- range .blocks }}
+            {{- if eq .type "hero" }}
+
+<div class="hero">
+    <h1>{{ .heading }}</h1>
+    <p>{{ .text }}</p>
+    <a href="{{ $.BasePath }}{{ .button_link }}" class="btn">{{ .button_label }}</a>
+</div>
+            {{- else if eq .type "card_grid" }}
+
+<div class="grid">
+    {{- range .cards }}
+    <div class="card">
+        <h3>{{ .icon }} {{ .heading }}</h3>
+        <p>{{ .text }}</p>
+    </div>
+    {{- end }}
+</div>
+            {{- else if eq .type "rich_text" }}
+
+{{ .body }}
+            {{- else if eq .type "image" }}
+
+<img src="{{ .src }}" alt="{{ .alt }}">
+            {{- end }}
+            {{- end }}
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; {{ .Year }} Built with SiteGen</p>
+        </div>
+    </footer>
+</body>
+
+</html>
