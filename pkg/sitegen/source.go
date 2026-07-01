@@ -73,6 +73,24 @@ func (s *Source) LoadContent() []byte {
 	return s.content
 }
 
+// LastMod returns the source's last-modified date as YYYY-MM-DD. An explicit
+// "updated" frontmatter value wins (so dates can be pinned across a fresh git
+// clone, which resets file mtimes); otherwise it falls back to the file's real
+// mtime. Exposed to templates (e.g. sitemap.xml <lastmod>). Returns "" when
+// neither is available.
+func (s *Source) LastMod() string {
+	if u, ok := s.Meta["updated"]; ok {
+		if str := strings.TrimSpace(fmt.Sprint(u)); str != "" {
+			return str
+		}
+	}
+	fi, err := os.Stat(s.Local)
+	if err != nil {
+		return ""
+	}
+	return fi.ModTime().Format("2006-01-02")
+}
+
 func (s *Source) Value(prop string) string {
 	var val string
 	switch prop {

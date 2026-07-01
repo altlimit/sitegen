@@ -112,6 +112,7 @@ Sitegen uses Go's `html/template` with extra helper functions.
 - `.Path`: Current page path (if parameterized).
 - `.Page`, `.Pages`: Pagination info.
 - `.BuildID`: Unix timestamp string, regenerated on every build (useful for cache busting).
+- `.LastMod`: Last-modified date (YYYY-MM-DD). Uses the `updated:` frontmatter if set, otherwise the source file's mtime. Also available per-source in `range sources` loops (e.g. `{{.LastMod}}`).
 
 ### Basic Example
 
@@ -126,6 +127,51 @@ template: main.html
   <h1>{{ .title }}</h1>
   <p>Welcome to our site!</p>
 {{end}}
+```
+
+## Sitemap
+
+A generated site includes a `src/sitemap.xml` that is itself a template — it lists
+every page automatically, so new content shows up without editing anything.
+
+```xml
+---
+parse: text
+---
+{{- $site := data "site.json" -}}
+{{- $t := .Today -}}
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+{{range sources "Local" "**/src/**.{html,md}"}}
+{{- if and (not (.Local | contains "404.html")) (ne (.Value "Meta.sitemap") "false") -}}
+  <url>
+    <loc>{{$site.url}}{{.Path}}</loc>
+    <lastmod>{{if .LastMod}}{{.LastMod}}{{else}}{{$t}}{{end}}</lastmod>
+  </url>
+  {{- end -}}
+{{- end -}}
+</urlset>
+```
+
+- **All page types**: the `{html,md}` glob covers both HTML and Markdown pages.
+- **`<loc>`**: uses each source's `.Path` prefixed with `url` from `data/site.json`.
+- **`<lastmod>`**: uses `.LastMod` — the `updated:` frontmatter date if present, else
+  the file's mtime, falling back to the build date.
+
+Exclude a page from the sitemap with a single frontmatter key:
+
+```yaml
+---
+sitemap: false
+---
+```
+
+Pin an explicit last-modified date (survives a fresh `git clone`, which resets mtimes):
+
+```yaml
+---
+updated: 2026-07-01
+---
 ```
 
 ## File Handlers
