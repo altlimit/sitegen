@@ -25,6 +25,28 @@ import (
 	"github.com/gobwas/glob"
 	"github.com/tdewolff/minify/v2"
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
+	ghtml "github.com/yuin/goldmark/renderer/html"
+)
+
+// mdRenderer is the shared Markdown converter. It enables GitHub-Flavored
+// Markdown (tables, strikethrough, task lists, autolinks), auto-generates an
+// id on every heading (so anchors/#links work), and passes authored raw HTML
+// through. Concurrency-safe, so a single package-level instance is reused.
+var mdRenderer = goldmark.New(
+	goldmark.WithExtensions(extension.GFM),
+	goldmark.WithParserOptions(parser.WithAutoHeadingID()),
+	goldmark.WithRendererOptions(ghtml.WithUnsafe()),
+)
+
+// mdLiteralEscaper neutralises Go-template / Liquid delimiters in rendered
+// Markdown *body* content so a page can contain literal `{{ ... }}` / `{% ... %}`
+// examples without them being executed. Markdown bodies are treated as content
+// (escaped) by DEFAULT; a page opts back into templating with `templated: true`.
+var mdLiteralEscaper = strings.NewReplacer(
+	"{{", "&#123;&#123;", "}}", "&#125;&#125;",
+	"{%", "&#123;%", "%}", "%&#125;",
 )
 
 var (
@@ -363,14 +385,26 @@ func (sg *SiteGen) markdown(s *Source) ([]byte, error) {
 	if content == nil {
 		return nil, fmt.Errorf("failed to load content for %s", s.Local)
 	}
-	// Convert markdown to HTML
+	// Convert markdown to HTML (GFM tables, heading ids, raw-HTML passthrough)
 	var buf bytes.Buffer
-	if err := goldmark.Convert(content, &buf); err != nil {
+	if err := mdRenderer.Convert(content, &buf); err != nil {
 		return nil, fmt.Errorf("markdown convert %s error %w", s.Local, err)
 	}
 	htmlContent := buf.String()
-	// Auto-wrap in {{define "block"}} if not already present
-	if !strings.Contains(string(content), "{{define") {
+	// A Markdown body is treated as content, NOT a Go template, by default — so
+	// literal {{ }} / {% %} examples render verbatim. A page opts back into
+	// templating with `templated: true`, or by writing its own {{define ...}}
+	// block (which is unambiguously template usage).
+	hasOwnDefine := strings.Contains(string(content), "{{define")
+	templated := hasOwnDefine
+	if t, ok := s.Meta["templated"].(bool); ok {
+		templated = t
+	}
+	if !templated {
+		htmlContent = mdLiteralEscaper.Replace(htmlContent)
+	}
+	// Auto-wrap in {{define "block"}} if the page didn't supply its own.
+	if !hasOwnDefine {
 		block := "content"
 		if b, ok := s.Meta["block"].(string); ok {
 			block = b

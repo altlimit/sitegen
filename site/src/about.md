@@ -2,6 +2,7 @@
 title: About
 description: "Learn more about SiteGen and how it works."
 template: main.html
+templated: true
 ---
 
 # About SiteGen
