@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	_ "embed"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -355,7 +356,7 @@ func main() {
 	flag.StringVar(&port, "port", "8888", "Port for localhost")
 	flag.BoolVar(&isShare, "share", false, "Enable public sharing")
 	flag.StringVar(&shareAuth, "share-auth", "", `Basic auth for share ("user:pass")`)
-	flag.StringVar(&shareServer, "share-server", "sitegen.dev:9443", "Share relay server address")
+	flag.StringVar(&shareServer, "share-server", "wss://relay.sitegen.dev", "Share relay URL")
 	flag.BoolVar(&cms, "cms", false, "Enable the built-in editing UI at /__cms (serve mode)")
 	flag.StringVar(&cmsAuth, "cms-auth", "", `Basic auth for the CMS ("user:pass")`)
 	flag.Parse()
@@ -404,6 +405,17 @@ func main() {
 	}
 	sg = sitegen.NewSiteGen(sitePath, tplDir, dataDir, sourceDir, pubPath, basePath, min, clean, serve, isWebp)
 	sg.CmdTimeout = time.Duration(cmdTimeout) * time.Second
+
+	if serve && isShare {
+		if _, err := share.ConnectURL(shareServer); err != nil {
+			log.Fatalf("-share-server: %v", err)
+		}
+		if shareAuth != "" {
+			if _, _, ok := share.SplitBasicAuth(shareAuth); !ok {
+				log.Fatalln(`-share-auth must be "user:pass"`)
+			}
+		}
+	}
 
 	// Single run
 	if !serve {
@@ -492,28 +504,49 @@ func main() {
 	}()
 
 	// Start share tunnel if enabled
+	shareCtx, stopShare := context.WithCancel(context.Background())
+	shareDone := make(chan struct{})
 	if isShare {
+		client := share.New(shareServer, server.ShareHandler(ss), shareAuth)
+		reloads, unsubscribe := ss.Subscribe()
 		go func() {
-			client := share.New(shareServer, ss, shareAuth)
-			ctx := context.Background()
-			client.RunWithReconnect(ctx, version,
-				func(subdomain string) {
-					url := fmt.Sprintf("https://%s.%s",
-						subdomain,
-						strings.TrimSuffix(strings.Split(shareServer, ":")[0], "/"),
-					)
-					p.Send(shareMsg(url))
+			defer unsubscribe()
+			for {
+				select {
+				case <-shareCtx.Done():
+					return
+				case <-reloads:
+					client.Notify()
+				}
+			}
+		}()
+		go func() {
+			defer close(shareDone)
+			client.RunWithReconnect(shareCtx, version,
+				func(url string) {
+					p.Send(shareMsg(strings.TrimSuffix(url, "/") + basePath))
 				},
 				func(err error) {
-					if err != nil {
+					if errors.Is(err, share.ErrUpgradeRequired) {
+						p.Send(shareErrMsg(err.Error()))
+					} else if err != nil {
 						p.Send(shareErrMsg(fmt.Sprintf("reconnecting... (%v)", err)))
 					}
 				},
 			)
 		}()
+	} else {
+		close(shareDone)
 	}
 
-	if _, err := p.Run(); err != nil {
+	_, err = p.Run()
+	// Close the tunnel cleanly so the relay frees it immediately.
+	stopShare()
+	select {
+	case <-shareDone:
+	case <-time.After(2 * time.Second):
+	}
+	if err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)
 	}

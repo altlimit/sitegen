@@ -78,7 +78,7 @@ Options:
   -base <path>         Base URL path (default: "/")
   -share               Enable public sharing via sitegen.dev
   -share-auth <u:p>    Basic auth for share ("user:pass")
-  -share-server <addr> Share relay server (default: "sitegen.dev:9443")
+  -share-server <url>  Share relay URL (default: "wss://relay.sitegen.dev")
   -cms                 Enable the built-in editing UI at /__cms (serve mode)
   -cms-auth <u:p>      Basic auth for the CMS ("user:pass")
   -help                Show help
@@ -195,7 +195,7 @@ Share your development server publicly with a single flag — no ngrok or third-
 sitegen -serve -share
 ```
 
-This creates a public URL like `https://<id>.sitegen.dev` that tunnels to your local dev server with hot reload support.
+This creates a public URL like `https://<id>.sitegen.dev` that tunnels to your local dev server, with live reload for everyone viewing it. The URL stays the same if your connection drops and reconnects, and is released when you quit sitegen.
 
 To require a password:
 
@@ -203,7 +203,20 @@ To require a password:
 sitegen -serve -share -share-auth "admin:secret"
 ```
 
-The share tunnel only serves static files from your `public/` directory (GET/HEAD only) and reconnects automatically if the connection drops.
+What visitors can reach:
+
+- Only the files in your `public/` directory, read-only (GET/HEAD).
+- Not the `-cms` editor or its API. Those stay on `localhost`.
+- Live-reload notifications are not password-protected. They contain only the word "updated".
+
+The relay runs on Cloudflare (a Worker with one Durable Object per tunnel). Its source is in [worker/](worker/), and you can deploy your own copy and point `-share-server` at it. The wire protocol is in [docs/SHARE_PROTOCOL.md](docs/SHARE_PROTOCOL.md).
+
+Limits per tunnel:
+
+- 50 requests/second (bursts of 100)
+- 64 requests in flight
+- 50 MB per response
+- 30 seconds for your dev server to start responding
 
 ## Built-in CMS
 

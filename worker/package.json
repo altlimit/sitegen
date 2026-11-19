@@ -1,0 +1,20 @@
+{
+	"name": "sitegen-relay",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"description": "Cloudflare Worker relay for sitegen -share",
+	"scripts": {
+		"dev": "wrangler dev --infer-origin-from-routes=false --var PUBLIC_DOMAIN:localhost --var LEGACY_PASSTHROUGH:false",
+		"deploy": "wrangler deploy",
+		"test": "vitest run",
+		"typecheck": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@cloudflare/vitest-plugin": "1.8.5",
+		"@cloudflare/workers-types": "5.20261119.1",
+		"typescript": "5.9.3",
+		"vitest": "5.1.1",
+		"wrangler": "4.165.0"
+	}
+}

@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"mime"
@@ -9,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 var (
@@ -32,7 +34,50 @@ function initHotReload() {
 }
 initHotReload();
 	</script>`
+
+	// shareHotReloadScript is injected into pages served through the share
+	// tunnel. The relay answers /__hotreload with a hibernatable WebSocket
+	// rather than proxying SSE, so idle viewers cost nothing to keep open.
+	shareHotReloadScript = `<script>
+(function() {
+	var delay = 2000;
+	function connect() {
+		if (typeof(WebSocket) === "undefined") return;
+		var ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/__hotreload");
+		ws.onopen = function() { delay = 2000; };
+		ws.onmessage = function(event) {
+			if (event.data === "updated") location.reload();
+		};
+		ws.onclose = function() {
+			setTimeout(connect, delay);
+			delay = Math.min(delay * 2, 30000);
+		};
+	}
+	connect();
+})();
+	</script>`
 )
+
+type shareCtxKey struct{}
+
+// ShareHandler wraps ss for requests arriving through the public share
+// tunnel. It hides dev-only endpoints (the CMS and the SSE live-reload
+// stream, which the relay replaces with its own WebSocket endpoint) and
+// injects the WebSocket live-reload script instead of the SSE one.
+func ShareHandler(ss *StaticServer) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/__cms") || r.URL.Path == "/__hotreload" {
+			http.NotFound(w, r)
+			return
+		}
+		ss.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), shareCtxKey{}, true)))
+	})
+}
+
+func isShared(r *http.Request) bool {
+	v, _ := r.Context().Value(shareCtxKey{}).(bool)
+	return v
+}
 
 type StaticServer struct {
 	PublicDir      string
@@ -154,7 +199,11 @@ func (ss *StaticServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				log.Println("Error writing response: ", err)
 			}
 			if bb := string(body); strings.Contains(bb, "</body>") {
-				bb = strings.ReplaceAll(bb, "</body>", fmt.Sprintf("%s</body>", hotReloadScript))
+				script := hotReloadScript
+				if isShared(r) {
+					script = shareHotReloadScript
+				}
+				bb = strings.ReplaceAll(bb, "</body>", fmt.Sprintf("%s</body>", script))
 				body = []byte(bb)
 			}
 			w.Write(body)
@@ -179,6 +228,15 @@ func (ss *StaticServer) Listen() {
 			}
 		}
 	}
+}
+
+// Subscribe registers for rebuild notifications (the same events the SSE
+// live-reload stream sends). Call the returned function to unsubscribe.
+func (ss *StaticServer) Subscribe() (<-chan []byte, func()) {
+	ch := make(chan []byte, 1)
+	ss.newClients <- ch
+	var once sync.Once
+	return ch, func() { once.Do(func() { ss.closingClients <- ch }) }
 }
 
 func NewStaticServer(dir, base string) *StaticServer {

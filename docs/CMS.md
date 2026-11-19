@@ -3,8 +3,9 @@
 SiteGen ships with an optional editing UI for non-technical editors. It reads
 and writes the **same source files** the generator consumes (`src/*` and
 `data/*.json`), so the filesystem stays the single source of truth — git
-history, frontmatter, templates, and the share tunnel all keep working. There is
-no database and no separate content store.
+history, frontmatter and templates all keep working, and pages you edit show up
+on a `-share` link as soon as they rebuild. There is no database and no separate
+content store.
 
 ```bash
 sitegen -serve -cms                        # editor at http://localhost:8888/__cms
@@ -190,6 +191,7 @@ it on the next rebuild.
 ## Security
 
 The CMS reads and writes only within `src/` and `data/` (path traversal is
-blocked) and is intended for **local/trusted** use during `-serve`. Use
-`-cms-auth user:pass` for basic auth if you expose it (e.g. over the share
-tunnel). It is not a multi-tenant, hardened hosting product.
+blocked) and is intended for **local/trusted** use during `-serve`. The `-share`
+tunnel never exposes it: `/__cms` returns 404 on the public URL. The dev server
+does listen on all network interfaces, so use `-cms-auth user:pass` on a shared
+network. It is not a multi-tenant, hardened hosting product.

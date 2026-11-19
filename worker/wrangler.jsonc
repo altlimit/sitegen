@@ -1,0 +1,24 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "sitegen-relay",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-11-01",
+	"workers_dev": false,
+	// Every tunnel host and relay.<domain>. The zone's DNS must have a proxied
+	// record for "*" (see README.md for the rollout steps).
+	"routes": [{ "pattern": "*.sitegen.dev/*", "zone_name": "sitegen.dev" }],
+	"durable_objects": {
+		"bindings": [{ "name": "TUNNEL", "class_name": "Tunnel" }],
+	},
+	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["Tunnel"] }],
+	// Coarse abuse guard: new tunnels per client IP, per Cloudflare location.
+	"ratelimits": [{ "name": "CONNECT_LIMITER", "namespace_id": "7421", "simple": { "limit": 10, "period": 60 } }],
+	"vars": {
+		"PUBLIC_DOMAIN": "sitegen.dev",
+		"RELAY_LABEL": "relay",
+		// Forward old 8-hex-char tunnel hosts to the legacy VPS during the
+		// migration overlap. Set to "false" once the VPS is shut down.
+		"LEGACY_PASSTHROUGH": "true",
+	},
+	"observability": { "enabled": true },
+}

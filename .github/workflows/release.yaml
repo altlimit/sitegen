@@ -8,6 +8,8 @@ on:
       - "*.md"
       - "site/**"
       - ".agents/**"
+      - "worker/**"
+      - ".github/workflows/relay.yaml"
 
 permissions:
   contents: write

@@ -5,15 +5,14 @@ go 1.25.0
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/coder/websocket v1.8.14
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gen2brain/webp v0.5.5
 	github.com/gobwas/glob v0.2.3
-	github.com/hashicorp/yamux v0.1.2
 	github.com/tdewolff/minify/v2 v2.24.8
 	github.com/yuin/goldmark v1.7.16
 	golang.org/x/image v0.36.0
 	golang.org/x/net v0.50.0
-	golang.org/x/time v0.15.0
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 )

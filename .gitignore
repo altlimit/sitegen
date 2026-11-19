@@ -11,4 +11,5 @@ debug.test
 node_modules
 test_site
 /sitegen
-/cmd/sharerelay/sharerelay
+.wrangler
+worker/dist

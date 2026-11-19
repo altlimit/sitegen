@@ -7,8 +7,10 @@ SiteGen is a fast, zero-dependency static site generator written in Go. It uses 
 ```
 sitegen/
 ├── main.go                 # CLI entry point, flag parsing, build orchestration
-├── cmd/
-│   └── sharerelay/         # Standalone relay server for the -share feature
+├── worker/                 # Cloudflare Worker + Durable Object relay for -share
+│   ├── src/index.ts        # Router: relay.<domain>/connect and <tunnel>.<domain>
+│   ├── src/tunnel.ts       # Tunnel Durable Object (hibernatable WebSockets)
+│   └── src/protocol.ts     # Wire protocol constants (see docs/SHARE_PROTOCOL.md)
 ├── pkg/
 │   ├── sitegen/            # Core static site generator engine
 │   │   ├── gen.go          # Site generation, template execution, file processing
@@ -20,8 +22,8 @@ sitegen/
 │   │   ├── data.go         # JSON data file loader
 │   │   ├── source.go       # Source file representation and frontmatter parsing
 │   │   └── funcs.go        # Custom template functions (sources, sort, paginate, etc.)
-│   ├── share/              # Client for -share feature (tunnel via yamux)
-│   │   └── client.go       # Connects to relay, multiplexes HTTP over WebSocket
+│   ├── share/              # Client for -share feature
+│   │   └── client.go       # Connects to the relay, serves tunnelled HTTP over one WebSocket
 │   └── server/             # Shared server utilities
 ├── site/                   # SiteGen's own website (built with sitegen)
 │   ├── src/                # Source HTML/MD/CSS/JS files
@@ -39,7 +41,7 @@ sitegen/
 - **Data Files**: JSON loaded from a `data/` directory
 - **Dev Server**: Built-in HTTP server with SSE-based live reload and file watching (`fsnotify`)
 - **TUI**: Interactive terminal UI using `charmbracelet/bubbletea` and `lipgloss`
-- **Share Feature**: Public URL tunneling via `hashicorp/yamux` multiplexing over WebSocket
+- **Share Feature**: Public URL tunneling over one WebSocket (`coder/websocket`) to a Cloudflare Worker relay in `worker/`. Protocol v1 is in `docs/SHARE_PROTOCOL.md`; the Go client, the Worker, and that doc must change together. Tunnelled requests go through `server.ShareHandler`, which hides `/__cms` and swaps SSE live reload for the relay's WebSocket endpoint.
 
 ## Key Conventions
 
@@ -61,8 +63,11 @@ sitegen -clean -minify
 # Build the binary
 go build -o sitegen .
 
-# Build the share relay server
-go build -o sharerelay ./cmd/sharerelay
+# Share relay (Cloudflare Worker)
+cd worker && npm ci
+npm run dev        # local relay; then: sitegen -serve -share -share-server ws://relay.localhost:8787
+npm test           # Worker tests (vitest in workerd)
+npm run deploy     # wrangler deploy
 ```
 
 ## Template Functions
@@ -118,4 +123,5 @@ The following custom functions are available in templates:
 
 ```bash
 go test ./...
+cd worker && npm test
 ```
