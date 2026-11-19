@@ -1,0 +1,39 @@
+---
+title: Template functions
+template: docs.html
+section: Reference
+path: /docs/functions
+hide_title: true
+sitemap: false
+---
+
+{{define "content"}}
+{{- /*
+  A generator page. It reads its slug from .Path (written after a space below),
+  so SiteGen skips it in the normal build and renders it once per function
+  through `page` in src/docs/functions.html.
+*/}}
+{{- $name := .Path}}
+{{- $fns := data "functions.json"}}
+{{- range $fns}}
+{{- if eq .name $name}}
+<p class="eyebrow"><a href="{{path "/docs/functions"}}">Template functions</a> · {{.group}}</p>
+<h1 class="fn-title"><code>{{.name}}</code></h1>
+<p class="lead">{{.summary}}</p>
+
+<pre class="fn-signature"><code>{{.signature}}</code></pre>
+
+{{.description}}
+
+<h2 id="example">Example</h2>
+<pre><code>{{.example}}</code></pre>
+{{- end}}
+{{- end}}
+
+<h2 id="related">Other functions</h2>
+<p class="fn-chips">
+    {{- range $fns}}{{if ne .name $name}}
+    <a href="{{path "/docs/functions/"}}{{.name}}"><code>{{.name}}</code></a>
+    {{- end}}{{end}}
+</p>
+{{end}}

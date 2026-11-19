@@ -109,4 +109,4 @@ The relay controls these headers on every request it sends to the CLI:
 ## Tunnel IDs
 
 - **New IDs** are 12 characters of lowercase base32 (`[a-z2-7]`), which is 60 random bits.
-- **Legacy IDs.** Hosts with 8 lowercase hex characters were issued by the old Go relay. While `LEGACY_PASSTHROUGH` is `"true"`, the Worker forwards them to the origin behind the DNS record, which is the legacy VPS.
+- **Legacy IDs.** The old Go relay issued 8 lowercase hex characters. Those hosts now get the offline page, and old CLIs can't connect: they spoke a raw TLS protocol on port 9443 that the Worker doesn't accept.

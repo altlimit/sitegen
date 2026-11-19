@@ -1,0 +1,58 @@
+name: Site
+
+# Builds site/ with the sitegen in this commit and deploys it to sitegen.dev
+# (worker/site.wrangler.jsonc). Engine changes can change the output, so they
+# redeploy the site too.
+on:
+  push:
+    branches:
+      - "master"
+    paths:
+      - "site/**"
+      - "pkg/**"
+      - "main.go"
+      - "go.mod"
+      - "go.sum"
+      - "worker/site.wrangler.jsonc"
+      - "worker/package-lock.json"
+      - ".github/workflows/site.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
+
+      - name: Build site
+        run: |
+          go build -o sitegen .
+          ./sitegen -clean -minify
+
+      - run: npm ci
+        working-directory: worker
+
+      - name: Deploy
+        working-directory: worker
+        run: npx wrangler deploy -c site.wrangler.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

@@ -1,7 +1,6 @@
 import { env, evictDurableObject, runDurableObjectAlarm } from "cloudflare:test";
 import { exports } from "cloudflare:workers";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import worker from "../src/index";
 import { FRAME_DATA, FRAME_END, PROTOCOL_VERSION, WINDOW } from "../src/protocol";
 
 const RELAY = "https://relay.sitegen.dev/connect";
@@ -106,7 +105,7 @@ describe("router", () => {
 	});
 
 	it("shows the offline page for unknown tunnels and foreign hosts", async () => {
-		for (const url of ["https://abcdefghijkl.sitegen.dev/", "https://www.sitegen.dev/", "https://abcdefghijkl.example.com/"]) {
+		for (const url of ["https://abcdefghijkl.sitegen.dev/", "https://0a1b2c3d.sitegen.dev/", "https://abcdefghijkl.example.com/"]) {
 			const res = await exports.default.fetch(url);
 			expect(res.status, url).toBe(404);
 			expect(await res.text()).toContain("offline");
@@ -125,16 +124,10 @@ describe("router", () => {
 		expect(res.status).toBe(400);
 	});
 
-	it("passes legacy 8-hex tunnel hosts through to the origin", async () => {
-		const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("from legacy vps"));
-		const res = await worker.fetch(new Request("https://0a1b2c3d.sitegen.dev/x"), env as any);
-		expect(await res.text()).toBe("from legacy vps");
-		expect(spy).toHaveBeenCalledOnce();
-
-		spy.mockClear();
-		const off = await worker.fetch(new Request("https://0a1b2c3d.sitegen.dev/x"), { ...(env as any), LEGACY_PASSTHROUGH: "false" });
-		expect(off.status).toBe(404);
-		expect(spy).not.toHaveBeenCalled();
+	it("redirects www to the apex website", async () => {
+		const res = await exports.default.fetch("https://www.sitegen.dev/docs/cli?x=1", { redirect: "manual" });
+		expect(res.status).toBe(301);
+		expect(res.headers.get("location")).toBe("https://sitegen.dev/docs/cli?x=1");
 	});
 });
 

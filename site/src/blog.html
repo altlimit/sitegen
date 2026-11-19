@@ -1,32 +1,40 @@
 ---
 title: Blog
+description: "Release notes and guides from the SiteGen project."
 template: main.html
 ---
 
 {{define "content"}}
-<h1>Blog</h1>
-<p>Example of pagination (2 posts per page).</p>
+<div>
+    <header class="page-header">
+        <p class="eyebrow">Blog</p>
+        <h1>News and guides</h1>
+        <p class="lead">What's new in SiteGen, and how to get the most out of it.
+            <a class="text-link" href="{{path "/feed.xml"}}">{{template "icon" "rss"}} Subscribe</a></p>
+    </header>
 
-{{ $posts := sort "Meta.date" "desc" (sources "RelPath" "blog/*") }}
-
-{{ $paginated := paginate 2 $posts }}
-
-<div class="grid">
-    {{ range $paginated }}
-    <div class="card">
-        <h3><a href="{{.Path}}">{{.Meta.title}}</a></h3>
-        <p class="text-sm" style="opacity: 0.7">{{.Meta.date}}</p>
-        <p>{{.Meta.summary}}</p>
+    {{- /* Newest first, four per page. paginate also writes /blog/2, /blog/3, ... */}}
+    {{- $posts := sort "Meta.date" "desc" (sources "RelPath" "blog/*")}}
+    <div class="post-feed">
+        {{- range paginate 4 $posts}}
+        <article class="post-item">
+            <time datetime="{{.Meta.date}}">{{.Meta.date}}</time>
+            <h2><a href="{{.Path}}">{{.Meta.title}}</a></h2>
+            <p>{{.Meta.summary}}</p>
+            <a class="text-link" href="{{.Path}}" aria-hidden="true" tabindex="-1">Read more {{template "icon" "arrow"}}</a>
+        </article>
+        {{- end}}
     </div>
-    {{ end }}
-</div>
 
-{{ if gt .Source.TotalPages 1 }}
-<div class="pagination">
-    {{ range pages .Source }}
-    <a href="{{.Path}}" class="{{if .Active}}active{{end}}">{{.Page}}</a>
-    {{ end }}
+    {{- if gt .Source.TotalPages 1}}
+    <nav class="pagination" aria-label="Blog pages">
+        <span>Page {{.Source.CurrentPage}} of {{.Source.TotalPages}}</span>
+        <div>
+            {{- range pages .Source}}
+            <a href="{{.Path}}"{{if .Active}} aria-current="page"{{end}}>{{.Page}}</a>
+            {{- end}}
+        </div>
+    </nav>
+    {{- end}}
 </div>
-{{ end }}
-
 {{end}}

@@ -18,7 +18,6 @@ export const WINDOW = 8;
 /** New tunnel IDs: 12 chars of lowercase RFC 4648 base32 (60 random bits). */
 export const TUNNEL_ID_RE = /^[a-z2-7]{12}$/;
 /** IDs issued by the old Go relay (8 hex chars), passed through during the overlap. */
-export const LEGACY_ID_RE = /^[0-9a-f]{8}$/;
 
 const B32 = "abcdefghijklmnopqrstuvwxyz234567";
 

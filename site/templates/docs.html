@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    {{template "head" .}}
+</head>
+
+<body class="docs">
+    {{template "header" .}}
+    {{- $site := data "site.json"}}
+    {{- $cur := .Source.Path}}
+    {{- /* Docs pages are the sources under docs/ with a numeric `order`. */}}
+    {{- $docs := sort "Meta.order" "asc" (filter "Meta.order" "^[0-9]+$" (sources "RelPath" "docs/*"))}}
+    <div class="container docs-layout">
+        <aside class="docs-sidebar" aria-label="Documentation">
+            <details class="docs-nav" open>
+                <summary>Documentation</summary>
+                <nav>
+                    {{- range (data "docs.json").sections}}
+                    {{- $section := .}}
+                    <h2>{{$section}}</h2>
+                    <ul>
+                        {{- range filter "Meta.section" (printf "^%s$" $section) $docs}}
+                        <li><a href="{{.Path}}"{{if eq .Path $cur}} aria-current="page"{{end}}>{{.Meta.title}}</a></li>
+                        {{- end}}
+                    </ul>
+                    {{- end}}
+                </nav>
+            </details>
+        </aside>
+
+        <main id="main" class="docs-main">
+            <article>
+                {{- if not .hide_title}}
+                <header class="docs-header">
+                    <p class="eyebrow">{{.section}}</p>
+                    <h1>{{.title}}</h1>
+                    {{with .description}}<p class="lead">{{.}}</p>{{end}}
+                </header>
+                {{- end}}
+                <div class="prose">
+                    {{template "content" .}}
+                </div>
+            </article>
+
+            {{- /* Previous / next, in sidebar order. */}}
+            {{- $prev := false}}{{$next := false}}{{$found := false}}
+            {{- range $docs}}
+            {{- if $found}}{{if not $next}}{{$next = .}}{{end}}
+            {{- else if eq .Path $cur}}{{$found = true}}
+            {{- else}}{{$prev = .}}{{end}}
+            {{- end}}
+            {{- if $found}}
+            <nav class="pager" aria-label="Previous and next page">
+                {{- with $prev}}
+                <a class="pager-prev" href="{{.Path}}"><span>Previous</span>{{.Meta.title}}</a>
+                {{- end}}
+                {{- with $next}}
+                <a class="pager-next" href="{{.Path}}"><span>Next</span>{{.Meta.title}}</a>
+                {{- end}}
+            </nav>
+            {{- end}}
+
+            <p class="docs-edit">
+                {{- with $site.repo}}<a href="{{.}}/edit/master/site/src/{{$.Source.Value "RelPath"}}">{{template "icon" "edit"}} Edit this page</a> · {{end -}}
+                Last updated {{.Source.LastMod}}
+            </p>
+        </main>
+
+        <aside class="docs-toc" aria-label="On this page" hidden>
+            <h2>On this page</h2>
+            <ul data-toc></ul>
+        </aside>
+    </div>
+    {{template "footer" .}}
+</body>
+
+</html>

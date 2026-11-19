@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    {{template "head" .}}
+    <meta property="article:published_time" content="{{.date}}">
+</head>
+
+<body>
+    {{template "header" .}}
+    <main id="main" class="page">
+        <article class="container narrow post">
+            <a class="back-link" href="{{path "/blog"}}">{{template "icon" "arrow-left"}} All posts</a>
+            <header class="post-header">
+                <p class="post-meta"><time datetime="{{.date}}">{{.date}}</time>{{with .author}} · {{.}}{{end}}</p>
+                <h1>{{.title}}</h1>
+                {{with .summary}}<p class="lead">{{.}}</p>{{end}}
+            </header>
+            <div class="prose">
+                {{template "content" .}}
+            </div>
+        </article>
+
+        {{- $cur := .Source.Path}}
+        {{- $more := sort "Meta.date" "desc" (sources "RelPath" "blog/*")}}
+        <section class="container narrow more-posts" aria-labelledby="more-posts">
+            <h2 id="more-posts">More from the blog</h2>
+            <div class="post-list">
+                {{- range limit 3 $more}}
+                {{- if ne .Path $cur}}
+                <a class="post-row" href="{{.Path}}">
+                    <time datetime="{{.Meta.date}}">{{.Meta.date}}</time>
+                    <span class="post-row-title">{{.Meta.title}}</span>
+                    {{template "icon" "arrow"}}
+                </a>
+                {{- end}}
+                {{- end}}
+            </div>
+        </section>
+    </main>
+    {{template "footer" .}}
+</body>
+
+</html>

@@ -1,0 +1,26 @@
+---
+parse: text
+sitemap: false
+---
+{{- $site := data "site.json" -}}
+{{- $posts := sort "Meta.date" "desc" (sources "RelPath" "blog/*") -}}
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>{{$site.title}} blog</title>
+  <subtitle>{{$site.description}}</subtitle>
+  <link href="{{$site.url}}{{path "/feed.xml"}}" rel="self"/>
+  <link href="{{$site.url}}{{path "/blog"}}"/>
+  <id>{{$site.url}}{{path "/blog"}}</id>
+  {{- range limit 1 $posts}}
+  <updated>{{.Meta.date}}T00:00:00Z</updated>
+  {{- end}}
+  {{- range limit 20 $posts}}
+  <entry>
+    <title>{{.Meta.title}}</title>
+    <link href="{{$site.url}}{{.Path}}"/>
+    <id>{{$site.url}}{{.Path}}</id>
+    <updated>{{.Meta.date}}T00:00:00Z</updated>
+    <summary>{{.Meta.summary}}</summary>
+  </entry>
+  {{- end}}
+</feed>

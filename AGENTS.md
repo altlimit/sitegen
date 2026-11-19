@@ -7,8 +7,9 @@ SiteGen is a fast, zero-dependency static site generator written in Go. It uses 
 ```
 sitegen/
 ├── main.go                 # CLI entry point, flag parsing, build orchestration
-├── worker/                 # Cloudflare Worker + Durable Object relay for -share
-│   ├── src/index.ts        # Router: relay.<domain>/connect and <tunnel>.<domain>
+├── worker/                 # Cloudflare Workers: the -share relay and the sitegen.dev website
+│   ├── site.wrangler.jsonc # Website: serves public/ (built from site/) at sitegen.dev
+│   ├── src/index.ts        # Relay router: relay.<domain>/connect and <tunnel>.<domain>
 │   ├── src/tunnel.ts       # Tunnel Durable Object (hibernatable WebSockets)
 │   └── src/protocol.ts     # Wire protocol constants (see docs/SHARE_PROTOCOL.md)
 ├── pkg/
@@ -25,7 +26,7 @@ sitegen/
 │   ├── share/              # Client for -share feature
 │   │   └── client.go       # Connects to the relay, serves tunnelled HTTP over one WebSocket
 │   └── server/             # Shared server utilities
-├── site/                   # SiteGen's own website (built with sitegen)
+├── site/                   # sitegen.dev, and the starter copied by -create (embedded in the binary)
 │   ├── src/                # Source HTML/MD/CSS/JS files
 │   ├── templates/          # Shared layout templates
 │   └── data/               # JSON data files
@@ -68,6 +69,9 @@ cd worker && npm ci
 npm run dev        # local relay; then: sitegen -serve -share -share-server ws://relay.localhost:8787
 npm test           # Worker tests (vitest in workerd)
 npm run deploy     # wrangler deploy
+
+# Website (sitegen.dev): CI deploys it on push to master via .github/workflows/site.yaml
+go run . -clean -minify && (cd worker && npx wrangler deploy -c site.wrangler.jsonc)
 ```
 
 ## Template Functions

@@ -5,7 +5,7 @@
 	"license": "MIT",
 	"description": "Cloudflare Worker relay for sitegen -share",
 	"scripts": {
-		"dev": "wrangler dev --infer-origin-from-routes=false --var PUBLIC_DOMAIN:localhost --var LEGACY_PASSTHROUGH:false",
+		"dev": "wrangler dev --infer-origin-from-routes=false --var PUBLIC_DOMAIN:localhost",
 		"deploy": "wrangler deploy",
 		"test": "vitest run",
 		"typecheck": "tsc --noEmit"

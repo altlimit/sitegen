@@ -1,0 +1,22 @@
+// The sitegen.dev website: an assets-only Worker serving the output of
+// `sitegen -clean -minify` (run from the repo root, which builds site/ into
+// public/). Deployed by .github/workflows/site.yaml:
+//   npx wrangler deploy -c site.wrangler.jsonc
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "sitegen-site",
+	"compatibility_date": "2026-11-01",
+	"workers_dev": false,
+	"preview_urls": false,
+	// The apex only. www and every other subdomain belong to the relay Worker,
+	// which redirects www here. The apex DNS record must be proxied.
+	"routes": [{ "pattern": "sitegen.dev/*", "zone_name": "sitegen.dev" }],
+	"assets": {
+		"directory": "../public",
+		// sitegen links pages without a trailing slash (/docs/cli), so serve
+		// /docs/cli/index.html at /docs/cli without a redirect.
+		"html_handling": "drop-trailing-slash",
+		// public/404.html, with a real 404 status.
+		"not_found_handling": "404-page"
+	}
+}

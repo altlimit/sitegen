@@ -2,7 +2,7 @@
 // the CLI and `<tunnel>.<domain>` visitor requests to one Tunnel Durable
 // Object per tunnel ID.
 
-import { CONNECT_HEADER, LEGACY_ID_RE, PROTOCOL_VERSION, TUNNEL_ID_RE, htmlPage, newTunnelId, offlinePage } from "./protocol";
+import { CONNECT_HEADER, PROTOCOL_VERSION, TUNNEL_ID_RE, htmlPage, newTunnelId, offlinePage } from "./protocol";
 import type { Tunnel } from "./tunnel";
 
 export { Tunnel } from "./tunnel";
@@ -15,8 +15,6 @@ export interface Env {
 	PUBLIC_DOMAIN?: string;
 	/** Subdomain label the CLI connects to. Default "relay". */
 	RELAY_LABEL?: string;
-	/** "true" forwards old 8-hex-char tunnel hosts to the origin (the legacy VPS). */
-	LEGACY_PASSTHROUGH?: string;
 }
 
 export default {
@@ -33,15 +31,15 @@ export default {
 		if (label === (env.RELAY_LABEL || "relay")) {
 			return connect(request, env, url, parent);
 		}
+		if (label === "www") {
+			// The website is served at the apex; send www there.
+			const port = url.port ? `:${url.port}` : "";
+			return Response.redirect(`${url.protocol}//${parent}${port}${url.pathname}${url.search}`, 301);
+		}
 		if (TUNNEL_ID_RE.test(label)) {
 			const headers = new Headers(request.headers);
 			headers.delete(CONNECT_HEADER);
 			return stub(env, label).fetch(new Request(request, { headers }));
-		}
-		if (LEGACY_ID_RE.test(label) && env.LEGACY_PASSTHROUGH === "true") {
-			// Old sitegen releases: let Cloudflare send this to the origin
-			// behind the DNS record (the legacy VPS relay).
-			return fetch(request);
 		}
 		return notFound();
 	},

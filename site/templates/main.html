@@ -2,23 +2,17 @@
 <html lang="en">
 
 <head>
-    {{ template "head" . }}
+    {{template "head" .}}
 </head>
 
 <body>
-    {{ template "nav" . }}
-
-    <main>
-        <div class="container">
-            {{ template "content" . }}
+    {{template "header" .}}
+    <main id="main" class="page">
+        <div class="container narrow page-body">
+            {{template "content" .}}
         </div>
     </main>
-
-    <footer>
-        <div class="container">
-            <p>&copy; {{ .Year }} Built with SiteGen</p>
-        </div>
-    </footer>
+    {{template "footer" .}}
 </body>
 
 </html>

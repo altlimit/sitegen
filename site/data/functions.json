@@ -1,0 +1,130 @@
+[
+    {
+        "name": "data",
+        "group": "Content",
+        "signature": "data \"file.json\"",
+        "summary": "Load and parse a JSON file from the data directory.",
+        "description": "<p>Reads <code>data/&lt;file&gt;</code> and returns the parsed JSON: an object becomes a map you read with <code>.key</code>, an array becomes a list you can <code>range</code>, <code>sort</code> and <code>filter</code>. If the file is missing or invalid, the error is logged and the result is empty.</p><p>A page that calls <code>data</code> is rebuilt whenever content changes during <code>-serve</code>.</p>",
+        "example": "{{ $site := data \"site.json\" }}\n&lt;title&gt;{{ $site.title }}&lt;/title&gt;\n\n{{ range data \"links.json\" }}\n  &lt;a href=\"{{ path .path }}\"&gt;{{ .name }}&lt;/a&gt;\n{{ end }}"
+    },
+    {
+        "name": "sources",
+        "group": "Content",
+        "signature": "sources \"property\" \"glob\"",
+        "summary": "List source files whose property matches a glob.",
+        "description": "<p>Returns every source file whose <em>property</em> matches the glob. Properties: <code>Path</code> (public URL), <code>Local</code> (absolute file path), <code>Filename</code>, <code>RelPath</code> (path under <code>src/</code>), <code>Ext</code>, and <code>Meta.&lt;key&gt;</code> for any frontmatter value.</p><p>Globs support <code>*</code>, <code>?</code>, <code>[abc]</code> and <code>{a,b}</code>. <code>*</code> also matches <code>/</code>, so <code>blog/*</code> includes nested files. Each result exposes <code>.Path</code>, <code>.Meta</code>, <code>.LastMod</code> and the other source fields.</p><p>Listing pages are dependency-tracked: adding a post rebuilds the pages that list it.</p>",
+        "example": "{{ range sources \"RelPath\" \"blog/*\" }}\n  &lt;a href=\"{{.Path}}\"&gt;{{ .Meta.title }}&lt;/a&gt;\n{{ end }}\n\n{{ $pages := sources \"Local\" \"**/src/**.{html,md}\" }}"
+    },
+    {
+        "name": "sort",
+        "group": "Lists",
+        "signature": "sort \"property\" \"asc|desc\" list",
+        "summary": "Sort sources, JSON objects or key/value pairs.",
+        "description": "<p>Works on sources (any property, including <code>Meta.&lt;key&gt;</code>), JSON objects (by a top-level field) and the pairs returned by <code>select</code> (<code>Key</code>, <code>Value</code>, or <code>Value.&lt;field&gt;</code>).</p><p>Values are compared as text. Give numbers the same number of digits (<code>05</code>, <code>10</code>) so they sort correctly. Dates in <code>YYYY-MM-DD</code> form sort naturally.</p>",
+        "example": "{{ range sort \"Meta.date\" \"desc\" (sources \"RelPath\" \"blog/*\") }}\n  {{ .Meta.date }}: {{ .Meta.title }}\n{{ end }}"
+    },
+    {
+        "name": "filter",
+        "group": "Lists",
+        "signature": "filter \"property\" \"regex\" list",
+        "summary": "Keep the items whose property matches a regular expression.",
+        "description": "<p>Takes the same properties as <code>sort</code> and a Go regular expression. Anchor the pattern with <code>^</code> and <code>$</code> for an exact match.</p>",
+        "example": "{{ $docs := sources \"RelPath\" \"docs/*\" }}\n{{ range filter \"Meta.section\" \"^Guides$\" $docs }}\n  &lt;li&gt;{{ .Meta.title }}&lt;/li&gt;\n{{ end }}"
+    },
+    {
+        "name": "limit",
+        "group": "Lists",
+        "signature": "limit n list",
+        "summary": "Take the first n items of a list.",
+        "description": "<p>Returns the whole list when it has <em>n</em> items or fewer. Combine it with <code>sort</code> for \"latest\" lists.</p>",
+        "example": "{{ $posts := sort \"Meta.date\" \"desc\" (sources \"RelPath\" \"blog/*\") }}\n{{ range limit 3 $posts }}\n  &lt;a href=\"{{.Path}}\"&gt;{{ .Meta.title }}&lt;/a&gt;\n{{ end }}"
+    },
+    {
+        "name": "offset",
+        "group": "Lists",
+        "signature": "offset n list",
+        "summary": "Skip the first n items of a list.",
+        "description": "<p>Returns an empty list when <em>n</em> is past the end. Pair it with <code>limit</code> to feature one item and list the rest.</p>",
+        "example": "{{ $featured := limit 1 $posts }}\n{{ $rest := offset 1 $posts }}"
+    },
+    {
+        "name": "select",
+        "group": "Lists",
+        "signature": "select map",
+        "summary": "Turn a JSON object into a list of key/value pairs.",
+        "description": "<p>Each pair has <code>.Key</code> and <code>.Value</code>. Map order is random, so sort the result by <code>Key</code> or <code>Value</code>.</p>",
+        "example": "{{ $site := data \"site.json\" }}\n{{ range sort \"Key\" \"asc\" (select $site.social) }}\n  &lt;a href=\"{{ .Value }}\"&gt;{{ .Key }}&lt;/a&gt;\n{{ end }}"
+    },
+    {
+        "name": "paginate",
+        "group": "Pages",
+        "signature": "paginate n list",
+        "summary": "Split a list across numbered pages.",
+        "description": "<p>Returns the items for the page being rendered and generates the extra pages: a listing at <code>/blog</code> gets <code>/blog/2</code>, <code>/blog/3</code> and so on. Use it once per page.</p><p>Read the position from <code>.Source.CurrentPage</code> and <code>.Source.TotalPages</code>, and build links with <code>pages</code>.</p>",
+        "example": "{{ $posts := sort \"Meta.date\" \"desc\" (sources \"RelPath\" \"blog/*\") }}\n{{ range paginate 10 $posts }}\n  &lt;h2&gt;{{ .Meta.title }}&lt;/h2&gt;\n{{ end }}\nPage {{ .Source.CurrentPage }} of {{ .Source.TotalPages }}"
+    },
+    {
+        "name": "pages",
+        "group": "Pages",
+        "signature": "pages .Source",
+        "summary": "Links for a paginated listing.",
+        "description": "<p>Returns one entry per page with <code>.Path</code>, <code>.Page</code> (the number) and <code>.Active</code>. The list is empty when everything fits on one page, so the loop renders nothing.</p>",
+        "example": "{{ range pages .Source }}\n  &lt;a href=\"{{.Path}}\"{{ if .Active }} aria-current=\"page\"{{ end }}&gt;{{ .Page }}&lt;/a&gt;\n{{ end }}"
+    },
+    {
+        "name": "page",
+        "group": "Pages",
+        "signature": "page \"source\" \"slug\"",
+        "summary": "Generate a page from a template file, once per slug.",
+        "description": "<p>Renders the source file (a path under <code>src/</code>) at <code>&lt;its URL&gt;/&lt;slug&gt;</code> and returns that URL. Inside the generated page, <code>.Path</code> holds the slug, which you use to look up the item to show.</p><p>A source that uses <code>.Path</code> after a space, as in <code>{{ .Path }}</code>, is a generator: it's only built through <code>page</code>, never on its own. Set <code>path:</code> in its frontmatter to choose the URL prefix. The function pages on this site are generated this way from <code>data/functions.json</code>.</p>",
+        "example": "{{/* src/team.html */}}\n{{ range data \"team.json\" }}\n  &lt;a href=\"{{ page \"team/member.html\" .slug }}\"&gt;{{ .name }}&lt;/a&gt;\n{{ end }}\n\n{{/* src/team/member.html, rendered at /team/member/&lt;slug&gt; */}}\n{{ $slug := .Path }}\n{{ range data \"team.json\" }}{{ if eq .slug $slug }}\n  &lt;h1&gt;{{ .name }}&lt;/h1&gt;\n{{ end }}{{ end }}"
+    },
+    {
+        "name": "path",
+        "group": "Pages",
+        "signature": "path \"/url\"",
+        "summary": "Prefix a URL with the base path.",
+        "description": "<p>Joins the <code>-base</code> path and the URL. Write every internal link and asset URL through <code>path</code> and the site works at <code>/</code> and under a subfolder, such as a GitHub Pages project site. Source <code>.Path</code> values already include the base.</p>",
+        "example": "&lt;link rel=\"stylesheet\" href=\"{{ path \"/css/styles.css\" }}\"&gt;\n&lt;!-- with -base /docs/ this becomes /docs/css/styles.css --&gt;"
+    },
+    {
+        "name": "json",
+        "group": "Helpers",
+        "signature": "json value",
+        "summary": "Encode a value as JSON.",
+        "description": "<p>Handy for passing data to scripts, or for writing JSON files from a <code>parse: text</code> template.</p>",
+        "example": "&lt;script&gt;\n  const nav = {{ json (data \"links.json\") }};\n&lt;/script&gt;"
+    },
+    {
+        "name": "contains",
+        "group": "Helpers",
+        "signature": "contains \"substring\" string",
+        "summary": "Check whether a string contains a substring.",
+        "description": "<p>Note the order: the substring comes first, so it reads well in a pipeline.</p>",
+        "example": "{{ if contains \"/blog/\" .Source.Path }}\n  &lt;a href=\"{{ path \"/blog\" }}\"&gt;All posts&lt;/a&gt;\n{{ end }}"
+    },
+    {
+        "name": "html",
+        "group": "Helpers",
+        "signature": "html string",
+        "summary": "Mark a string as HTML.",
+        "description": "<p>SiteGen renders with Go's <code>text/template</code>, which doesn't escape output, so <code>html</code>, <code>js</code> and <code>css</code> return the string unchanged. They exist so templates written for <code>html/template</code> keep working. Only print values you trust.</p>",
+        "example": "{{ html .Meta.banner }}"
+    },
+    {
+        "name": "js",
+        "group": "Helpers",
+        "signature": "js string",
+        "summary": "Mark a string as JavaScript.",
+        "description": "<p>Returns the string unchanged. See <code>html</code>.</p>",
+        "example": "&lt;script&gt;{{ js .Meta.script }}&lt;/script&gt;"
+    },
+    {
+        "name": "css",
+        "group": "Helpers",
+        "signature": "css string",
+        "summary": "Mark a string as CSS.",
+        "description": "<p>Returns the string unchanged. See <code>html</code>.</p>",
+        "example": "&lt;style&gt;{{ css .Meta.styles }}&lt;/style&gt;"
+    }
+]

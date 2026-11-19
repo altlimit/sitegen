@@ -8,7 +8,6 @@ export default defineConfig({
 			miniflare: {
 				// Miniflare enforces the limiter locally; tests open many tunnels.
 				ratelimits: { CONNECT_LIMITER: { namespace_id: "7421", simple: { limit: 10000, period: 60 } } },
-				bindings: { LEGACY_PASSTHROUGH: "true" },
 			},
 		}),
 	],

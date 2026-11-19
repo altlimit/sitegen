@@ -4,8 +4,8 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2026-11-01",
 	"workers_dev": false,
-	// Every tunnel host and relay.<domain>. The zone's DNS must have a proxied
-	// record for "*" (see README.md for the rollout steps).
+	// Every tunnel host, relay.<domain> and www (redirected to the apex). The
+	// zone's DNS must have a proxied record for "*" (see README.md).
 	"routes": [{ "pattern": "*.sitegen.dev/*", "zone_name": "sitegen.dev" }],
 	"durable_objects": {
 		"bindings": [{ "name": "TUNNEL", "class_name": "Tunnel" }],
@@ -16,9 +16,6 @@
 	"vars": {
 		"PUBLIC_DOMAIN": "sitegen.dev",
 		"RELAY_LABEL": "relay",
-		// Forward old 8-hex-char tunnel hosts to the legacy VPS during the
-		// migration overlap. Set to "false" once the VPS is shut down.
-		"LEGACY_PASSTHROUGH": "true",
 	},
 	"observability": { "enabled": true },
 }

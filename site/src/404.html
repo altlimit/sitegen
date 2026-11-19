@@ -1,19 +1,18 @@
 ---
-title: Page Not Found
+title: Page not found
 path: 404.html
+template: main.html
+sitemap: false
 ---
 
-<!DOCTYPE html>
-<html>
-
-<head>
-    {{template "head" .}}
-</head>
-
-<body>
-    <div class="h-screen w-screen bg-blue-600 flex justify-center content-center flex-wrap">
-        <p class="font-sans text-white error-text">404</p>
+{{define "content"}}
+<div class="not-found">
+    <p class="not-found-code">404</p>
+    <h1>This page doesn't exist</h1>
+    <p class="lead">The link may be old, or the page may have moved.</p>
+    <div class="actions">
+        <a class="btn btn-primary" href="{{path "/"}}">Go home</a>
+        <a class="btn btn-ghost" href="{{path "/docs"}}">Browse the docs</a>
     </div>
-</body>
-
-</html>
+</div>
+{{end}}

@@ -1,0 +1,30 @@
+---
+title: Template functions
+description: The functions SiteGen adds to Go templates, for data, lists, pages and output.
+section: Reference
+order: 85
+template: docs.html
+---
+
+{{define "content"}}
+{{- /*
+  Built from data/functions.json, grouped by data/docs.json. Each `page` call
+  also generates a detail page from src/docs/function.html at
+  /docs/functions/<name>.
+*/}}
+{{- $fns := data "functions.json"}}
+<p>These work alongside Go's built-in template functions, such as <code>eq</code>, <code>len</code> and <code>printf</code>. Select a function for its details and an example.</p>
+
+{{- range (data "docs.json").function_groups}}
+{{- $group := .}}
+<h2 id="{{$group}}">{{$group}}</h2>
+<div class="fn-list">
+    {{- range filter "group" (printf "^%s$" $group) $fns}}
+    <a class="fn-row" href="{{page "docs/function.html" .name}}">
+        <code class="fn-sig">{{.signature}}</code>
+        <span>{{.summary}}</span>
+    </a>
+    {{- end}}
+</div>
+{{- end}}
+{{end}}

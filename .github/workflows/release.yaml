@@ -13,15 +13,10 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 jobs:
   release:
     name: Release
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -74,15 +69,3 @@ jobs:
             dist/sitegen_darwin_arm64
             dist/sitegen_windows_amd64.exe
             dist/checksums.txt
-
-      - name: Build site
-        run: |
-          go build
-          ./sitegen -clean -minify -base /sitegen
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: "./public/sitegen"
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4

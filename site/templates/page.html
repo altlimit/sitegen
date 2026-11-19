@@ -2,48 +2,161 @@
 <html lang="en">
 
 <head>
-    {{ template "head" . }}
+    {{template "head" .}}
 </head>
 
 <body>
-    {{ template "nav" . }}
+    {{template "header" .}}
+    <main id="main" class="blocks">
+        {{- /*
+          A block page: the layout lives in the `blocks:` frontmatter list and
+          each block is rendered by its `type`. The CMS edits these as forms.
+          To add a block type, add a branch here and an entry in cms.yaml.
+        */}}
+        {{- range .blocks}}
+        {{- if eq .type "hero"}}
+        <section class="hero">
+            <div class="container hero-grid">
+                <div class="hero-copy">
+                    {{- with .badge}}<p class="badge">{{.}}</p>{{end}}
+                    <h1>{{.heading}}</h1>
+                    <p class="lead">{{.text}}</p>
+                    <div class="actions">
+                        {{- if .button_label}}<a class="btn btn-primary" href="{{path .button_link}}">{{.button_label}} {{template "icon" "arrow"}}</a>{{end}}
+                        {{- if .secondary_label}}<a class="btn btn-ghost" href="{{if contains "://" .secondary_link}}{{.secondary_link}}{{else}}{{path .secondary_link}}{{end}}">{{.secondary_label}}</a>{{end}}
+                    </div>
+                    {{- with .install}}
+                    <div class="install" data-copy-root>
+                        <span class="prompt" aria-hidden="true">$</span><code data-copy>{{.}}</code>
+                        <button class="copy-btn" type="button" aria-label="Copy install command">{{template "icon" "copy"}}{{template "icon" "check"}}</button>
+                    </div>
+                    {{- end}}
+                </div>
+                {{- with .terminal}}
+                <div class="terminal" role="img" aria-label="Example terminal session">
+                    <div class="terminal-bar"><span></span><span></span><span></span><em>~/my-site</em></div>
+                    <pre>{{.}}</pre>
+                </div>
+                {{- end}}
+            </div>
+        </section>
 
-    <main>
-        <div class="container">
-            {{- range .blocks }}
-            {{- if eq .type "hero" }}
+        {{- else if eq .type "card_grid"}}
+        <section class="section">
+            <div class="container">
+                {{- if .heading}}
+                <div class="section-head">
+                    {{with .eyebrow}}<p class="eyebrow">{{.}}</p>{{end}}
+                    <h2>{{.heading}}</h2>
+                    {{with .text}}<p class="lead">{{.}}</p>{{end}}
+                </div>
+                {{- end}}
+                <div class="card-grid">
+                    {{- range .cards}}
+                    {{- if .link}}<a class="card card-link" href="{{path .link}}">{{else}}<div class="card">{{end}}
+                        {{- with .icon}}<span class="card-icon">{{template "icon" .}}</span>{{end}}
+                        <h3>{{.heading}}</h3>
+                        <p>{{.text}}</p>
+                    {{- if .link}}</a>{{else}}</div>{{end}}
+                    {{- end}}
+                </div>
+            </div>
+        </section>
 
-<div class="hero">
-    <h1>{{ .heading }}</h1>
-    <p>{{ .text }}</p>
-    <a href="{{ $.BasePath }}{{ .button_link }}" class="btn">{{ .button_label }}</a>
-</div>
-            {{- else if eq .type "card_grid" }}
+        {{- else if eq .type "split"}}
+        <section class="section{{if .alt}} section-alt{{end}}">
+            <div class="container split{{if .reverse}} split-reverse{{end}}">
+                <div class="split-copy">
+                    {{with .eyebrow}}<p class="eyebrow">{{.}}</p>{{end}}
+                    <h2>{{.heading}}</h2>
+                    <p class="lead">{{.text}}</p>
+                    {{- with .points}}
+                    <ul class="checks">
+                        {{- range .}}<li>{{template "icon" "check"}}<span>{{.text}}</span></li>{{end}}
+                    </ul>
+                    {{- end}}
+                    {{- if .link_label}}<a class="text-link" href="{{path .link}}">{{.link_label}} {{template "icon" "arrow"}}</a>{{end}}
+                </div>
+                <figure class="code-window">
+                    <figcaption>{{template "icon" "file"}} {{.filename}}</figcaption>
+                    <pre><code>{{.code}}</code></pre>
+                </figure>
+            </div>
+        </section>
 
-<div class="grid">
-    {{- range .cards }}
-    <div class="card">
-        <h3>{{ .icon }} {{ .heading }}</h3>
-        <p>{{ .text }}</p>
-    </div>
-    {{- end }}
-</div>
-            {{- else if eq .type "rich_text" }}
+        {{- else if eq .type "steps"}}
+        <section class="section">
+            <div class="container">
+                <div class="section-head">
+                    {{with .eyebrow}}<p class="eyebrow">{{.}}</p>{{end}}
+                    <h2>{{.heading}}</h2>
+                    {{with .text}}<p class="lead">{{.}}</p>{{end}}
+                </div>
+                <ol class="steps">
+                    {{- range .items}}
+                    <li class="step">
+                        <h3>{{.title}}</h3>
+                        <p>{{.text}}</p>
+                        {{with .command}}<code class="step-cmd">{{.}}</code>{{end}}
+                    </li>
+                    {{- end}}
+                </ol>
+            </div>
+        </section>
 
-{{ .body }}
-            {{- else if eq .type "image" }}
+        {{- else if eq .type "latest_posts"}}
+        {{- /* Pulls the newest posts from src/blog with sources + sort + limit. */}}
+        <section class="section section-alt">
+            <div class="container">
+                <div class="section-head section-head-row">
+                    <div>
+                        {{with .eyebrow}}<p class="eyebrow">{{.}}</p>{{end}}
+                        <h2>{{.heading}}</h2>
+                    </div>
+                    <a class="text-link" href="{{path "/blog"}}">All posts {{template "icon" "arrow"}}</a>
+                </div>
+                <div class="post-cards">
+                    {{- range limit 3 (sort "Meta.date" "desc" (sources "RelPath" "blog/*"))}}
+                    <a class="card card-link post-card" href="{{.Path}}">
+                        <time datetime="{{.Meta.date}}">{{.Meta.date}}</time>
+                        <h3>{{.Meta.title}}</h3>
+                        <p>{{.Meta.summary}}</p>
+                    </a>
+                    {{- end}}
+                </div>
+            </div>
+        </section>
 
-<img src="{{ .src }}" alt="{{ .alt }}">
-            {{- end }}
-            {{- end }}
-        </div>
+        {{- else if eq .type "cta"}}
+        <section class="section">
+            <div class="container">
+                <div class="cta">
+                    <h2>{{.heading}}</h2>
+                    <p>{{.text}}</p>
+                    <div class="actions">
+                        <a class="btn btn-primary" href="{{path .button_link}}">{{.button_label}} {{template "icon" "arrow"}}</a>
+                        {{- if .secondary_label}}<a class="btn btn-ghost" href="{{if contains "://" .secondary_link}}{{.secondary_link}}{{else}}{{path .secondary_link}}{{end}}">{{.secondary_label}}</a>{{end}}
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        {{- else if eq .type "rich_text"}}
+        <section class="section">
+            <div class="container narrow prose">{{.body}}</div>
+        </section>
+
+        {{- else if eq .type "image"}}
+        <section class="section">
+            <figure class="container narrow figure">
+                <img src="{{path .src}}" alt="{{.alt}}" loading="lazy">
+                {{with .caption}}<figcaption>{{.}}</figcaption>{{end}}
+            </figure>
+        </section>
+        {{- end}}
+        {{- end}}
     </main>
-
-    <footer>
-        <div class="container">
-            <p>&copy; {{ .Year }} Built with SiteGen</p>
-        </div>
-    </footer>
+    {{template "footer" .}}
 </body>
 
 </html>

@@ -1,0 +1,92 @@
+{{/*
+  Shared partials. Every file in templates/ is parsed into one set, so any
+  layout can call these with {{template "name" .}}.
+*/}}
+
+{{define "head"}}
+{{- $site := data "site.json" -}}
+{{- $url := print $site.url .Source.Path -}}
+{{- if .Path}}{{$url = print $url "/" .Path}}{{end -}}
+{{- if gt .Source.CurrentPage 1}}{{$url = print $url "/" .Source.CurrentPage}}{{end -}}
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{with .Path}}{{.}} · {{end}}{{with .title}}{{.}} · {{$site.title}}{{else}}{{$site.title}}: {{$site.tagline}}{{end}}</title>
+<meta name="description" content="{{with .description}}{{.}}{{else}}{{$site.description}}{{end}}">
+<link rel="canonical" href="{{$url}}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{$site.title}}">
+<meta property="og:title" content="{{with .title}}{{.}}{{else}}{{$site.title}}: {{$site.tagline}}{{end}}">
+<meta property="og:description" content="{{with .description}}{{.}}{{else}}{{$site.description}}{{end}}">
+<meta property="og:url" content="{{$url}}">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="{{path "/img/favicon.svg"}}" type="image/svg+xml">
+<link rel="alternate" type="application/atom+xml" title="{{$site.title}} blog" href="{{path "/feed.xml"}}">
+<link rel="stylesheet" href="{{path "/css/styles.css"}}?v={{.BuildID}}">
+<script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<script src="{{path "/js/main.js"}}?v={{.BuildID}}" defer></script>
+{{template "addHead" .}}
+{{end}}
+
+{{/* Pages can add tags to <head> by defining their own "addHead". */}}
+{{define "addHead"}}{{end}}
+
+{{define "logo"}}<svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" class="logo-bg"/><path d="M21.5 10.5H14a3 3 0 0 0 0 6h4a3 3 0 0 1 0 6h-7.5" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>{{end}}
+
+{{define "header"}}
+{{- $site := data "site.json" -}}
+{{- $cur := .Source.Path -}}
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="site-header">
+    <div class="container header-inner">
+        <a class="brand" href="{{path "/"}}">{{template "logo"}}<span>{{$site.title}}</span></a>
+        <nav class="site-nav" id="site-nav" aria-label="Main">
+            {{- range data "links.json"}}
+            {{- $href := path .path}}
+            <a href="{{$href}}"{{if or (eq $href $cur) (eq (print $href "/") $cur)}} aria-current="page"{{else if and (ne .path "/") (contains (print $href "/") (print $cur "/"))}} aria-current="true"{{end}}>{{.name}}</a>
+            {{- end}}
+        </nav>
+        <div class="header-actions">
+            {{- with $site.repo}}
+            <a class="icon-btn" href="{{.}}" aria-label="SiteGen on GitHub">{{template "icon" "github"}}</a>
+            {{- end}}
+            <button class="icon-btn" type="button" data-theme-toggle aria-label="Toggle dark mode">{{template "icon" "moon"}}{{template "icon" "sun"}}</button>
+            <button class="icon-btn nav-toggle" type="button" aria-controls="site-nav" aria-expanded="false" aria-label="Menu">{{template "icon" "menu"}}</button>
+        </div>
+    </div>
+</header>
+{{end}}
+
+{{define "footer"}}
+{{- $site := data "site.json" -}}
+<footer class="site-footer">
+    <div class="container footer-grid">
+        <div class="footer-brand">
+            <a class="brand" href="{{path "/"}}">{{template "logo"}}<span>{{$site.title}}</span></a>
+            <p>{{$site.tagline}} One binary, no runtime, no node_modules.</p>
+        </div>
+        {{- range data "footer.json"}}
+        <div class="footer-col">
+            <h2>{{.title}}</h2>
+            <ul>
+                {{- range .links}}
+                <li><a href="{{path .path}}">{{.name}}</a></li>
+                {{- end}}
+            </ul>
+        </div>
+        {{- end}}
+        <div class="footer-col">
+            <h2>Project</h2>
+            <ul>
+                {{- range sort "Key" "asc" (select $site.social)}}
+                <li><a href="{{.Value}}">{{.Key}}</a></li>
+                {{- end}}
+                <li><a href="{{path "/feed.xml"}}">Blog feed</a></li>
+            </ul>
+        </div>
+    </div>
+    <div class="container footer-bottom">
+        <span>&copy; {{.Year}} {{$site.title}} · MIT licensed</span>
+        <span>Built with SiteGen{{if .Dev}} · <span class="dev-badge" title="Shown only by sitegen -serve (.Dev)">dev build</span>{{end}}</span>
+    </div>
+</footer>
+{{end}}

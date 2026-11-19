@@ -1,18 +1,14 @@
 [
     {
-        "name": "Home",
-        "path": "/"
+        "name": "Docs",
+        "path": "/docs"
     },
     {
-        "name": "Features",
-        "path": "/features"
+        "name": "Functions",
+        "path": "/docs/functions"
     },
     {
         "name": "Blog",
         "path": "/blog"
-    },
-    {
-        "name": "About",
-        "path": "/about"
     }
 ]

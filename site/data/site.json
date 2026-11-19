@@ -1,5 +1,12 @@
 {
-    "title": "Site Home",
-    "description": "Site description",
-    "url": "http://example.com"
+    "title": "SiteGen",
+    "tagline": "Static sites, simply.",
+    "description": "A fast, single-binary static site generator written in Go. Go templates, Markdown, JSON data, live reload, a built-in CMS and public share links.",
+    "url": "https://sitegen.dev",
+    "repo": "https://github.com/altlimit/sitegen",
+    "social": {
+        "GitHub": "https://github.com/altlimit/sitegen",
+        "Releases": "https://github.com/altlimit/sitegen/releases",
+        "Issues": "https://github.com/altlimit/sitegen/issues"
+    }
 }

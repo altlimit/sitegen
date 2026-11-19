@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -72,12 +73,12 @@ func TestGetSources(t *testing.T) {
 		key     string
 		want    int
 	}{
-		{"/img/promo.svg", "Path", 1},
-		{"/blog/*", "Path", 3},
+		{"/img/favicon.svg", "Path", 1},
+		{"/blog/*", "Path", 5},
 		{"**index.html", "Filename", 1},
 		{"index.html", "Filename", 1},
 		{"Homepage", "Meta.title", 0},
-		{"Welcome to SiteGen", "Meta.title", 1},
+		{"Meet the built-in CMS", "Meta.title", 1},
 	}
 
 	for _, tt := range tests {
@@ -156,8 +157,8 @@ func TestMapToList(t *testing.T) {
 	}
 	list := mapToList(val)
 	for _, kv := range list {
-		if val[kv.Key] != kv.Value {
-			t.Errorf("expects %s got %s", val[kv.Key], kv.Value)
+		if !reflect.DeepEqual(val[kv.Key], kv.Value) {
+			t.Errorf("expects %v got %v", val[kv.Key], kv.Value)
 		}
 	}
 }
@@ -174,8 +175,8 @@ func TestSort(t *testing.T) {
 		order string
 		want  []string
 	}{
-		{"Meta.date", "desc", []string{"2026-01-03", "2026-01-02", "2026-01-01"}},
-		{"Meta.date", "asc", []string{"2026-01-01", "2026-01-02", "2026-01-03"}},
+		{"Meta.date", "desc", []string{"2026-11-19", "2026-07-02", "2026-07-01", "2026-06-24", "2026-03-01"}},
+		{"Meta.date", "asc", []string{"2026-03-01", "2026-06-24", "2026-07-01", "2026-07-02", "2026-11-19"}},
 	}
 
 	for _, tt := range tests {
@@ -198,8 +199,8 @@ func TestSort(t *testing.T) {
 		order string
 		want  []string
 	}{
-		{"name", "desc", []string{"Home", "Features", "Blog", "About"}},
-		{"name", "asc", []string{"About", "Blog", "Features", "Home"}},
+		{"name", "desc", []string{"Functions", "Docs", "Blog"}},
+		{"name", "asc", []string{"Blog", "Docs", "Functions"}},
 	}
 	data := sg.Data("links.json")
 	// links.json is array of objects
@@ -235,8 +236,8 @@ func TestSort(t *testing.T) {
 		order string
 		want  []string
 	}{
-		{"Key", "desc", []string{"url", "title", "description"}},
-		{"Key", "asc", []string{"description", "title", "url"}},
+		{"Key", "desc", []string{"url", "title", "tagline"}},
+		{"Key", "asc", []string{"description", "repo", "social"}},
 	}
 	val := sg.Data("site.json").(map[string]interface{})
 	list := mapToList(val)
@@ -297,11 +298,11 @@ func TestLocalToPath(t *testing.T) {
 		want   string
 	}{
 		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "index.html")], "/"},
-		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "img", "promo.svg")], "/img/promo.svg"},
+		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "img", "favicon.svg")], "/img/favicon.svg"},
 		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "blog.html")], "/blog"},
-		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "blog", "css.html")], "/blog/css"},
-		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "blog", "incremental.html")], "/blog/incremental"},
-		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "blog", "welcome.html")], "/blog/welcome"},
+		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "blog", "built-in-cms.md")], "/blog/built-in-cms"},
+		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "docs", "index.md")], "/docs"},
+		{sg.sources[filepath.Join(sg.SitePath, sg.SourceDir, "404.html")], "/404.html"},
 	}
 
 	for _, tt := range tests {
@@ -367,7 +368,7 @@ func TestData(t *testing.T) {
 		data string
 		want int
 	}{
-		{"links.json", 4},
+		{"links.json", 3},
 		{"site.json", 2},
 	}
 

@@ -5,12 +5,18 @@ parse: text
 {{- $t := .Today -}}
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-{{range sources "Local" "**/src/**.{html,md}"}}
+{{range sort "Path" "asc" (sources "Local" "**/src/**.{html,md}")}}
 {{- if and (not (.Local | contains "404.html")) (ne (.Value "Meta.sitemap") "false") -}}
   <url>
     <loc>{{$site.url}}{{.Path}}</loc>
     <lastmod>{{if .LastMod}}{{.LastMod}}{{else}}{{$t}}{{end}}</lastmod>
   </url>
-  {{- end -}}
+{{end -}}
 {{- end -}}
+{{- /* Pages generated with `page` aren't sources, so list them from their data. */ -}}
+{{range data "functions.json"}}
+  <url>
+    <loc>{{$site.url}}{{path "/docs/functions/"}}{{.name}}</loc>
+  </url>
+{{- end}}
 </urlset>

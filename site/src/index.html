@@ -2,22 +2,130 @@
 template: page.html
 blocks:
   - type: hero
-    heading: "Static Sites, Simply."
-    text: "A fast, flexible, and zero-dependency static site generator written in Go."
-    button_label: "Explore Features"
-    button_link: "features"
+    badge: "Open source · MIT licensed"
+    heading: "Static sites, simply."
+    text: "One Go binary turns HTML, Markdown and JSON into a fast static site. Live reload, a built-in CMS and public share links come with it, with nothing else to install."
+    button_label: "Get started"
+    button_link: "/docs"
+    secondary_label: "View on GitHub"
+    secondary_link: "https://github.com/altlimit/sitegen"
+    install: "alt install altlimit/sitegen"
+    terminal: |-
+      $ sitegen -create
+      Site template created: ./site
+
+      $ sitegen -serve -share
+        ✓ Built site
+        Local    http://localhost:8888/
+        Public   https://k3x9q2m7a4bz.sitegen.dev/
+        Watching for changes…
   - type: card_grid
+    eyebrow: "Features"
+    heading: "Everything a content site needs"
+    text: "Nothing to configure before you start, and no plugins to keep up to date."
     cards:
-      - icon: "🚀"
-        heading: "Fast & Incremental"
-        text: "Builds only what's needed. Smart caching ensures lightning fast rebuilds during development."
-      - icon: "🔄"
-        heading: "Live Reload"
-        text: "Built-in development server that detects changes and refreshes your browser instantly."
-      - icon: "🎨"
-        heading: "Powerful Templating"
-        text: "Leverage Go's text/template engine with custom helpers for data, sorting, and pagination."
-      - icon: "🌐"
-        heading: "Public Sharing"
-        text: "Instantly share your dev server via a public URL with <code>-share</code>. No ngrok needed."
+      - icon: bolt
+        heading: "Incremental builds"
+        text: "Only the files you change are rebuilt, and listing pages update when the content they list changes."
+        link: "/docs/data"
+      - icon: refresh
+        heading: "Live reload"
+        text: "The dev server watches your site and refreshes the browser every time you save."
+        link: "/docs"
+      - icon: layers
+        heading: "Go templates"
+        text: "Layouts, partials and blocks in Go's template language, with helpers for data, sorting and pagination."
+        link: "/docs/templates"
+      - icon: file
+        heading: "Markdown"
+        text: "GitHub-flavored Markdown with tables, task lists and heading anchors. Template syntax stays literal unless you opt in."
+        link: "/docs/content"
+      - icon: database
+        heading: "JSON data"
+        text: "Put JSON files in data/ and use them on any page, or generate a page for every item."
+        link: "/docs/data"
+      - icon: edit
+        heading: "Built-in CMS"
+        text: "An editor for pages, blocks, collections and data files that saves to the same source files."
+        link: "/docs/cms"
+      - icon: globe
+        heading: "Share previews"
+        text: "Give your dev server a public HTTPS link with live reload, so others can review as you work."
+        link: "/docs/sharing"
+      - icon: package
+        heading: "One binary"
+        text: "No runtime and no node_modules. Minifies HTML, CSS and JS, and can convert images to WebP."
+        link: "/docs/assets"
+  - type: split
+    eyebrow: "Content"
+    heading: "Write in Markdown, lay out with templates"
+    text: "Pages are files. Frontmatter sets the layout and metadata, and the body is HTML or Markdown."
+    points:
+      - text: "YAML frontmatter, available in templates as .title"
+      - text: "GitHub-flavored Markdown with heading anchors"
+      - text: "Any layout from templates/, chosen per page"
+    link_label: "Pages and content"
+    link: "/docs/content"
+    filename: "src/blog/hello.md"
+    code: |-
+      &#45;&#45;&#45;
+      title: Hello, world
+      date: 2026-11-19
+      template: post.html
+      &#45;&#45;&#45;
+
+      Write posts in **Markdown**. Tables, task
+      lists and fenced code blocks just work.
+
+      - [x] Write the post
+      - [ ] Send the preview link
+  - type: split
+    alt: true
+    reverse: true
+    eyebrow: "Templates"
+    heading: "Lists, pagination and data without plugins"
+    text: "Query your own files from any template. Sort and filter them, and split long lists across pages."
+    points:
+      - text: "sources finds files by path, name or frontmatter"
+      - text: "paginate writes /blog/2, /blog/3 and so on"
+      - text: "page generates a page for each item in your data"
+    link_label: "Template functions"
+    link: "/docs/functions"
+    filename: "src/blog.html"
+    code: |-
+      {{ $posts := sort "Meta.date" "desc" (sources "RelPath" "blog/*") }}
+
+      {{ range paginate 10 $posts }}
+        &lt;a href="{{.Path}}"&gt;
+          &lt;h2&gt;{{ .Meta.title }}&lt;/h2&gt;
+          &lt;time&gt;{{ .Meta.date }}&lt;/time&gt;
+        &lt;/a&gt;
+      {{ end }}
+
+      {{ range pages .Source }}
+        &lt;a href="{{.Path}}"&gt;{{ .Page }}&lt;/a&gt;
+      {{ end }}
+  - type: steps
+    eyebrow: "Workflow"
+    heading: "Three commands from idea to deployed"
+    items:
+      - title: "Create"
+        text: "Scaffold a site with layouts, a blog, docs and a CMS config."
+        command: "sitegen -create"
+      - title: "Develop"
+        text: "Run the dev server with live reload. Add -share for a public link."
+        command: "sitegen -serve"
+      - title: "Ship"
+        text: "Build minified files into public/ and upload them to any static host."
+        command: "sitegen -clean -minify"
+  - type: latest_posts
+    eyebrow: "Blog"
+    heading: "Latest updates"
+  - type: cta
+    heading: "Build your next site with SiteGen"
+    text: "Free and open source. Install it in one command and have a site running in a minute."
+    button_label: "Read the docs"
+    button_link: "/docs"
+    secondary_label: "Star on GitHub"
+    secondary_link: "https://github.com/altlimit/sitegen"
 ---

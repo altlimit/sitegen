@@ -1,0 +1,20 @@
+[
+    {
+        "title": "Learn",
+        "links": [
+            { "name": "Getting started", "path": "/docs" },
+            { "name": "Templates", "path": "/docs/templates" },
+            { "name": "Functions", "path": "/docs/functions" },
+            { "name": "CLI reference", "path": "/docs/cli" }
+        ]
+    },
+    {
+        "title": "Features",
+        "links": [
+            { "name": "Built-in CMS", "path": "/docs/cms" },
+            { "name": "Share previews", "path": "/docs/sharing" },
+            { "name": "Deploying", "path": "/docs/deploy" },
+            { "name": "Blog", "path": "/blog" }
+        ]
+    }
+]

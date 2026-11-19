@@ -1,12 +1,102 @@
-# Optional CMS schema. Without this file the editor still works by inferring
-# fields from a page's existing blocks; with it, the editor offers typed widgets
-# and an "add block -> pick type" menu. See ROADMAP.md.
+# Optional schema for the built-in CMS (sitegen -serve -cms).
+# Without this file the editor still works, showing each file's frontmatter and
+# body. With it, the editor offers typed forms, a block builder for block pages,
+# a "+ New" button per collection, and forms for data files.
+# Full reference: https://github.com/altlimit/sitegen/blob/master/docs/CMS.md
 
-# Folder collections: many entries = files under src/<folder>. The editor shows
-# a "+ New" button per collection and a typed create form.
+# Where image uploads are saved, relative to src/.
+media_folder: img
+
+# Block types for block pages (src/index.html). Each one needs a matching
+# branch in templates/page.html.
+blocks:
+  - type: hero
+    label: Hero
+    fields:
+      - { name: badge, widget: string }
+      - { name: heading, widget: string }
+      - { name: text, widget: text }
+      - { name: button_label, widget: string }
+      - { name: button_link, widget: string }
+      - { name: secondary_label, widget: string }
+      - { name: secondary_link, widget: string }
+      - { name: install, widget: string }
+      - { name: terminal, widget: text }
+  - type: card_grid
+    label: Card grid
+    fields:
+      - { name: eyebrow, widget: string }
+      - { name: heading, widget: string }
+      - { name: text, widget: text }
+      - name: cards
+        widget: list
+        fields:
+          # One of: bolt, refresh, code, file, globe, edit, image, package,
+          # terminal, layers, database (see templates/icons.html).
+          - { name: icon, widget: string }
+          - { name: heading, widget: string }
+          - { name: text, widget: text }
+          - { name: link, widget: string }
+  - type: split
+    label: Text and code
+    fields:
+      - { name: eyebrow, widget: string }
+      - { name: heading, widget: string }
+      - { name: text, widget: text }
+      - name: points
+        widget: list
+        fields:
+          - { name: text, widget: string }
+      - { name: link_label, widget: string }
+      - { name: link, widget: string }
+      - { name: filename, widget: string }
+      # Shown as written. Type &lt; and &gt; for < and >, and &#45;&#45;&#45;
+      # for a line of three dashes (a bare one would end the frontmatter).
+      - { name: code, widget: text }
+      - { name: alt, widget: boolean }
+      - { name: reverse, widget: boolean }
+  - type: steps
+    label: Steps
+    fields:
+      - { name: eyebrow, widget: string }
+      - { name: heading, widget: string }
+      - { name: text, widget: text }
+      - name: items
+        widget: list
+        fields:
+          - { name: title, widget: string }
+          - { name: text, widget: text }
+          - { name: command, widget: string }
+  - type: latest_posts
+    label: Latest blog posts
+    fields:
+      - { name: eyebrow, widget: string }
+      - { name: heading, widget: string }
+  - type: cta
+    label: Call to action
+    fields:
+      - { name: heading, widget: string }
+      - { name: text, widget: text }
+      - { name: button_label, widget: string }
+      - { name: button_link, widget: string }
+      - { name: secondary_label, widget: string }
+      - { name: secondary_link, widget: string }
+  - type: rich_text
+    label: Rich text
+    fields:
+      # HTML is allowed.
+      - { name: body, widget: text }
+  - type: image
+    label: Image
+    fields:
+      - { name: src, widget: image }
+      - { name: alt, widget: string }
+      - { name: caption, widget: string }
+
+# Folder collections: each entry is a file under src/<folder>.
 collections:
   - name: blog
-    label: Blog Post
+    label: Blog post
     folder: blog
     extension: md
     slug: "{{title}}"
@@ -14,19 +104,34 @@ collections:
       - { name: title, widget: string }
       - { name: date, widget: date }
       - { name: summary, widget: text }
-      - { name: template, widget: hidden, default: main.html }
+      - { name: template, widget: hidden, default: post.html }
       - { name: body, widget: markdown }
-
-# Data files: typed editing of data/*.json. A single object, or a list when
-# the file holds a JSON array.
-data:
-  - name: site
-    label: Site Settings
-    file: site.json
+  - name: docs
+    label: Docs page
+    folder: docs
+    extension: md
+    slug: "{{title}}"
     fields:
       - { name: title, widget: string }
       - { name: description, widget: text }
+      # Basics, Guides or Reference (see data/docs.json).
+      - { name: section, widget: string }
+      # Two digits, such as 45, to place it between existing pages.
+      - { name: order, widget: string }
+      - { name: template, widget: hidden, default: docs.html }
+      - { name: body, widget: markdown }
+
+# Data files under data/.
+data:
+  - name: site
+    label: Site settings
+    file: site.json
+    fields:
+      - { name: title, widget: string }
+      - { name: tagline, widget: string }
+      - { name: description, widget: text }
       - { name: url, widget: string }
+      - { name: repo, widget: string }
   - name: nav
     label: Navigation
     file: links.json
@@ -34,30 +139,25 @@ data:
     fields:
       - { name: name, widget: string }
       - { name: path, widget: string }
-
-blocks:
-  - type: hero
-    label: Hero
+  - name: footer
+    label: Footer links
+    file: footer.json
+    list: true
     fields:
-      - { name: heading, widget: string }
-      - { name: text, widget: text }
-      - { name: button_label, widget: string }
-      - { name: button_link, widget: string }
-  - type: card_grid
-    label: Card Grid
-    fields:
-      - name: cards
+      - { name: title, widget: string }
+      - name: links
         widget: list
         fields:
-          - { name: icon, widget: string }
-          - { name: heading, widget: string }
-          - { name: text, widget: text }
-  - type: rich_text
-    label: Rich Text
+          - { name: name, widget: string }
+          - { name: path, widget: string }
+  - name: functions
+    label: Function reference
+    file: functions.json
+    list: true
     fields:
-      - { name: body, widget: text }
-  - type: image
-    label: Image
-    fields:
-      - { name: src, widget: image }
-      - { name: alt, widget: string }
+      - { name: name, widget: string }
+      - { name: group, widget: string }
+      - { name: signature, widget: string }
+      - { name: summary, widget: string }
+      - { name: description, widget: text }
+      - { name: example, widget: text }

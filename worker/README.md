@@ -1,6 +1,11 @@
-# sitegen share relay (Cloudflare Worker)
+# sitegen.dev Workers
 
-This Worker is the public side of `sitegen -serve -share`. It has two parts:
+This folder holds two Cloudflare Workers:
+
+- **The share relay** ([wrangler.jsonc](wrangler.jsonc)), the public side of `sitegen -serve -share`. Most of this README is about it.
+- **The website** ([site.wrangler.jsonc](site.wrangler.jsonc)), an assets-only Worker serving `sitegen.dev` from the build of [../site](../site). See [The website](#the-website).
+
+The relay has two parts:
 
 - **The router** ([src/index.ts](src/index.ts)) accepts the CLI's WebSocket at `relay.<domain>/connect`, and visitor requests at `<tunnel>.<domain>`.
 - **The Tunnel Durable Object** ([src/tunnel.ts](src/tunnel.ts)) runs one instance per tunnel. It holds the CLI's socket using the WebSocket Hibernation API, so an idle tunnel is evicted from memory and costs nothing. It forwards each visitor request down that socket.
@@ -31,13 +36,12 @@ npm run typecheck
 
 | Setting | Purpose |
 |---|---|
-| `routes` | `*.sitegen.dev/*`. It covers `relay.sitegen.dev` and every tunnel host. |
+| `routes` | `*.sitegen.dev/*`. It covers `relay.sitegen.dev`, every tunnel host, and `www`, which redirects to the apex. |
 | `PUBLIC_DOMAIN` | The parent domain for tunnels. Any other host gets 404. |
 | `RELAY_LABEL` | The subdomain the CLI connects to (default `relay`). |
-| `LEGACY_PASSTHROUGH` | `"true"` forwards old 8-hex-character tunnel hosts to the origin, which is the old VPS. |
 | `CONNECT_LIMITER` | Rate Limiting binding: 10 new tunnels per minute per IP, per Cloudflare location. |
 
-To self-host, change the route and `PUBLIC_DOMAIN` to your own zone, set `LEGACY_PASSTHROUGH` to `"false"`, deploy, and point the CLI at your relay:
+To self-host, change the route and `PUBLIC_DOMAIN` to your own zone, deploy, and point the CLI at your relay:
 
 ```bash
 sitegen -serve -share -share-server wss://relay.example.com
@@ -56,21 +60,25 @@ To deploy by hand instead, run `npx wrangler login`, then `npm run deploy`.
 
 A Workers Paid plan is recommended for real traffic. On the Free plan, Durable Objects stop serving after 100,000 requests per day.
 
-## Migration from the Go relay (sitegen.dev)
+## The website
 
-Released sitegen versions before this change connect to `sitegen.dev:9443` over raw TLS, which a Worker cannot accept. The plan is to run both relays for 60 days, then shut the VPS down. This assumes the `sitegen.dev` zone is already on Cloudflare, as the old Caddy DNS-01 setup implies.
+`sitegen.dev` is the starter site in [../site](../site), built by the sitegen in the same commit and served as static assets:
 
-1. **Deploy the Worker**, either by pushing to `master` with the secrets set or by hand (see [Deploying](#deploying)). Until step 2, tunnel hosts are DNS-only, so no traffic reaches the Worker yet.
-2. **Update DNS** in the `sitegen.dev` zone:
-   - Set the `*` record (the VPS IP) to **Proxied**, so tunnel hosts reach the Worker. With `LEGACY_PASSTHROUGH` on, old 8-hex hosts are still forwarded to the VPS.
-   - Leave the apex `sitegen.dev` record **DNS only**, so old CLIs can still reach port 9443 directly.
-   - Set the SSL/TLS mode to **Full (strict)**. Caddy's wildcard certificate keeps working for the passthrough.
-3. **Check both generations at once:**
-   - Run an old release with `sitegen -serve -share`. You should get an 8-hex URL that works.
-   - Run a build with this change. You should get a 12-character URL that works.
-4. **Release the new CLI.**
-5. **After 60 days:**
-   - Set `LEGACY_PASSTHROUGH` to `"false"` and redeploy.
-   - Replace the `*` record with a proxied `AAAA * 100::`.
-   - Shut down the VPS.
-   - Old CLIs will then fail to connect and must upgrade.
+- [site.wrangler.jsonc](site.wrangler.jsonc) routes `sitegen.dev/*` to the files in `../public`. Pages are served without a trailing slash, and missing URLs get `404.html` with a 404 status.
+- The `Site` workflow ([../.github/workflows/site.yaml](../.github/workflows/site.yaml)) builds and deploys it on pushes to `master` that touch `site/`, the engine or this config. It uses the same two secrets as the relay.
+
+To deploy by hand, from the repo root:
+
+```bash
+go run . -clean -minify
+cd worker && npx wrangler deploy -c site.wrangler.jsonc
+```
+
+## DNS
+
+Both Workers run on routes, so the `sitegen.dev` zone needs proxied records for them to receive traffic. Nothing sits behind them, so the records can point at the placeholder address `100::`:
+
+| Type | Name | Content | Proxy |
+|---|---|---|---|
+| `AAAA` | `sitegen.dev` | `100::` | Proxied |
+| `AAAA` | `*` | `100::` | Proxied |
