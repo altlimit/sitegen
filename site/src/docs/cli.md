@@ -21,6 +21,7 @@ Run in the folder that contains your `site/` directory. With no flags, SiteGen b
 | `sitegen -serve -share` | Also get a public preview link |
 | `sitegen -serve -cms` | Also open the editor at `/__cms` |
 | `sitegen -clean -minify` | Production build |
+| `sitegen -publish` | Production build, published to altengine |
 
 ## Building
 
@@ -55,6 +56,16 @@ Run in the folder that contains your `site/` directory. With no flags, SiteGen b
 | `-share-server` | `wss://relay.sitegen.dev` | Share relay to connect to |
 | `-cms` | off | Enable the editor at `/__cms` |
 | `-cms-auth` | | Require `user:pass` for the editor |
+
+## Publishing
+
+| Flag | Default | Description |
+|---|---|---|
+| `-publish` | off | Build as `-clean -minify`, then publish `public/` to altengine. Can't be combined with `-serve` |
+| `-publish-name` | `site/publish.json`, else the folder name | The site's name. It's published as the altengine instance `sitegen-<name>` |
+| `-publish-message` | | A note on the deployment, up to 200 characters |
+| `-publish-device` | off | Sign in with a code entered on another device |
+| `-publish-signout` | off | Revoke this machine's altengine key, forget it, and exit |
 
 ## Other
 

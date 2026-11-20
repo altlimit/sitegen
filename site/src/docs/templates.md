@@ -66,7 +66,7 @@ To let pages add to a layout, define an empty block and call it from the layout.
 | `.Source` | The current source file (see below) |
 | `.Dev` | `true` under `sitegen -serve` |
 | `.BasePath` | The `-base` path, `/` by default |
-| `.BuildID` | Changes on every build. Add it to asset URLs to bust caches |
+| `.BuildID` | Changes on every build. For cache-busting asset URLs, prefer `hash`, which changes only when the file does |
 | `.Today` | The build date, `YYYY-MM-DD` |
 | `.Year` | The build year, `YYYY` |
 | `.Path` | In a page made with `page`, the slug it was generated for |
@@ -95,7 +95,7 @@ Because SiteGen renders with `text/template`, values are printed exactly as they
 If the site might be served from a subfolder, write internal links and asset URLs with `path`, which adds the `-base` path:
 
 ```html
-<link rel="stylesheet" href="{{ path "/css/styles.css" }}?v={{ .BuildID }}">
+<link rel="stylesheet" href="{{ path "/css/styles.css" }}?v={{ hash "/css/styles.css" }}">
 <a href="{{ path "/docs" }}">Docs</a>
 ```
 

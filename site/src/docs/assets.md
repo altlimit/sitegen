@@ -8,12 +8,14 @@ template: docs.html
 
 ## Static files
 
-Anything in `src/` that isn't a page is copied to `public/` at the same path: stylesheets, scripts, images, fonts and downloads. Reference them with `path` so they work under a base path, and add `.BuildID` to bust browser caches after each build:
+Anything in `src/` that isn't a page is copied to `public/` at the same path: stylesheets, scripts, images, fonts and downloads. Reference them with `path` so they work under a base path, and add `hash` to bust browser caches when a file changes:
 
 ```html
-<link rel="stylesheet" href="{{ path "/css/styles.css" }}?v={{ .BuildID }}">
-<script src="{{ path "/js/main.js" }}?v={{ .BuildID }}" defer></script>
+<link rel="stylesheet" href="{{ path "/css/styles.css" }}?v={{ hash "/css/styles.css" }}">
+<script src="{{ path "/js/main.js" }}?v={{ hash "/js/main.js" }}" defer></script>
 ```
+
+`hash` changes only when that file does. `.BuildID` also works, but it changes on every build, so every page changes too and `sitegen -publish` uploads them all again.
 
 ## Minification
 

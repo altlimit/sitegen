@@ -74,7 +74,7 @@ func TestGetSources(t *testing.T) {
 		want    int
 	}{
 		{"/img/favicon.svg", "Path", 1},
-		{"/blog/*", "Path", 5},
+		{"/blog/*", "Path", 6},
 		{"**index.html", "Filename", 1},
 		{"index.html", "Filename", 1},
 		{"Homepage", "Meta.title", 0},
@@ -175,8 +175,8 @@ func TestSort(t *testing.T) {
 		order string
 		want  []string
 	}{
-		{"Meta.date", "desc", []string{"2026-11-19", "2026-07-02", "2026-07-01", "2026-06-24", "2026-03-01"}},
-		{"Meta.date", "asc", []string{"2026-03-01", "2026-06-24", "2026-07-01", "2026-07-02", "2026-11-19"}},
+		{"Meta.date", "desc", []string{"2026-11-19", "2026-11-19", "2026-07-02", "2026-07-01", "2026-06-24", "2026-03-01"}},
+		{"Meta.date", "asc", []string{"2026-03-01", "2026-06-24", "2026-07-01", "2026-07-02", "2026-11-19", "2026-11-19"}},
 	}
 
 	for _, tt := range tests {
@@ -378,5 +378,46 @@ func TestData(t *testing.T) {
 			sg.Data(tt.data)
 			// todo
 		})
+	}
+}
+
+func TestHash(t *testing.T) {
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "src", "css"), 0o755)
+	css := filepath.Join(dir, "src", "css", "styles.css")
+	os.WriteFile(css, []byte("body{}"), 0o644)
+	sg := NewSiteGen(dir, "templates", "data", "src", filepath.Join(dir, "public"), "/base/", nil, false, false, false)
+
+	h := sg.Hash("/css/styles.css")
+	if len(h) != 10 || h != sg.Hash("css/styles.css") {
+		t.Fatalf("hash = %q", h)
+	}
+	if h2 := sg.Hash("/css/styles.css"); h2 != h {
+		t.Fatal("hash isn't stable")
+	}
+	os.WriteFile(css, []byte("body{color:red}"), 0o644)
+	if sg.Hash("/css/styles.css") == h {
+		t.Fatal("hash didn't change with the file")
+	}
+	if sg.Hash("/missing.css") != "" {
+		t.Fatal("missing file hashed")
+	}
+}
+
+// Sources with equal sort keys come out in the same order on every build.
+func TestSortTiesAreDeterministic(t *testing.T) {
+	sg := testSiteGen()
+	first := ""
+	for i := 0; i < 20; i++ {
+		var paths []string
+		for _, v := range sortBy("Meta.date", "desc", sg.GetSources("RelPath", "blog/*")) {
+			paths = append(paths, v.(*Source).Path)
+		}
+		got := strings.Join(paths, ",")
+		if i == 0 {
+			first = got
+		} else if got != first {
+			t.Fatalf("order changed:\n%s\n%s", first, got)
+		}
 	}
 }

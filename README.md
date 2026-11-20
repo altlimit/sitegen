@@ -15,6 +15,7 @@ Sitegen is a simple, flexible, and fast static site generator written in Go. It 
 - 📦 **Zero Dependency**: Single binary, easy to install.
 - 🔧 **File Handlers**: Custom build commands for specific file types (e.g. CSS, JS).
 - 🌐 **Public Sharing**: Instantly share your dev server via a public URL (like ngrok, built-in).
+- 🚢 **One-command publishing**: `sitegen -publish` builds the site and puts it live on altengine static hosting, uploading only what changed. See [Publishing to altengine](#publishing-to-altengine).
 - ✏️ **Built-in CMS**: Optional `-cms` editing UI for non-technical editors — block builder, collections, data files, and image uploads, writing the same source files. See [docs/CMS.md](docs/CMS.md).
 
 ## Installation
@@ -81,6 +82,11 @@ Options:
   -share-server <url>  Share relay URL (default: "wss://relay.sitegen.dev")
   -cms                 Enable the built-in editing UI at /__cms (serve mode)
   -cms-auth <u:p>      Basic auth for the CMS ("user:pass")
+  -publish             Build (as -clean -minify) and publish to altengine
+  -publish-name <name> Site name; published as sitegen-<name> (default: site/publish.json, else the folder name)
+  -publish-message <t> Note on the deployment (max 200 characters)
+  -publish-device      Sign in with a code entered on another device (no browser)
+  -publish-signout     Revoke and forget this machine's altengine key
   -help                Show help
 ```
 
@@ -93,6 +99,7 @@ Sitegen uses Go's `html/template` with extra helper functions.
 | Function | Description |
 |----------|-------------|
 | `path` | Prefixes path with base URL. |
+| `hash` | Short content hash of a source file, for cache-busting (`?v={{hash "/css/styles.css"}}`). |
 | `sources "prop" "pattern"` | Returns list of sources matching pattern. |
 | `data "file.json"` | Loads JSON data from `data/` directory. |
 | `sort "prop" "order"` | Sorts input array/slice. |
@@ -217,6 +224,23 @@ Limits per tunnel:
 - 64 requests in flight
 - 50 MB per response
 - 30 seconds for your dev server to start responding
+
+## Publishing to altengine
+
+One command builds the site for production and puts it live on [altengine](https://www.altengine.net/docs/static/) static hosting:
+
+```bash
+sitegen -publish
+```
+
+The first time, sitegen opens your browser to sign in to altengine (there's no key to copy), creates the static site, and saves its name to `site/publish.json`. Commit that file so teammates and CI publish to the same site. Each publish uploads only the files that changed, makes the new build live, and prints the URL. Later runs just publish.
+
+- **Site name:** every site sitegen creates is the altengine instance `sitegen-<name>`. `<name>` is `-publish-name`, else the project folder's name (lowercased; anything outside `a-z 0-9 -` becomes `-`). After the first publish it comes from `site/publish.json`. If a site of the folder's name already exists, sitegen stops rather than publish over it; pass `-publish-name` to confirm.
+- **Address:** altengine gives the site a random subdomain. Change it in the site's settings in the altengine console, or add a custom domain there.
+- **No browser?** `sitegen -publish -publish-device` prints a code to enter on another device.
+- **CI:** set `ALTENGINE_API_KEY`. sitegen never prompts and never stores it.
+- **The key** can create and deploy `sitegen-*` sites and nothing else in your organization, so one sign-in per machine covers all your sitegen sites. It's kept in the OS keyring, or in a `0600` file under your user config folder where there's no keyring, never in `site/` or `public/`. `sitegen -publish-signout` revokes it and forgets it.
+- **Limits:** 5,000 files per deployment and 25 MB per file (a site's own setting can raise that to 100 MB).
 
 ## Built-in CMS
 

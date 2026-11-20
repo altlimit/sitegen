@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -20,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/altlimit/sitegen/pkg/publish"
 	"github.com/altlimit/sitegen/pkg/server"
 	"github.com/altlimit/sitegen/pkg/share"
 	"github.com/altlimit/sitegen/pkg/sitegen"
@@ -334,6 +336,11 @@ func main() {
 		showVersion bool
 		cms         bool
 		cmsAuth     string
+		isPublish   bool
+		pubName     string
+		pubMessage  string
+		pubDevice   bool
+		pubSignout  bool
 		min         *minify.M
 		ss          *server.StaticServer
 		sg          *sitegen.SiteGen
@@ -359,6 +366,11 @@ func main() {
 	flag.StringVar(&shareServer, "share-server", "wss://relay.sitegen.dev", "Share relay URL")
 	flag.BoolVar(&cms, "cms", false, "Enable the built-in editing UI at /__cms (serve mode)")
 	flag.StringVar(&cmsAuth, "cms-auth", "", `Basic auth for the CMS ("user:pass")`)
+	flag.BoolVar(&isPublish, "publish", false, "Build (as -clean -minify) and publish to altengine static hosting")
+	flag.StringVar(&pubName, "publish-name", "", "Site name; sitegen publishes to the altengine instance sitegen-<name> (default: site/publish.json, else the project folder's name)")
+	flag.StringVar(&pubMessage, "publish-message", "", "Note on the deployment (max 200 characters)")
+	flag.BoolVar(&pubDevice, "publish-device", false, "Sign in to altengine with a code entered on another device")
+	flag.BoolVar(&pubSignout, "publish-signout", false, "Revoke and forget this machine's altengine key, then exit")
 	flag.Parse()
 
 	if showVersion {
@@ -375,6 +387,38 @@ func main() {
 		}
 		log.Println("Site template created: ", sitePath)
 		return
+	}
+
+	if pubSignout || isPublish || pubDevice || pubName != "" || pubMessage != "" {
+		if !isPublish && (pubDevice || pubName != "" || pubMessage != "") {
+			log.Fatalln("-publish-name, -publish-message and -publish-device need -publish")
+		}
+		if serve {
+			log.Fatalln("-publish can't be combined with -serve")
+		}
+	}
+	if pubSignout {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer stop()
+		if err := publish.New(os.Stdout).SignOut(ctx); err != nil {
+			log.Fatalln(err)
+		}
+		return
+	}
+	var (
+		publishName      string
+		publishConfirmed bool
+	)
+	if isPublish {
+		var err error
+		if publishName, publishConfirmed, err = publish.ResolveName(pubName, sitePath); err != nil {
+			log.Fatalln(err)
+		}
+		if n := len([]rune(pubMessage)); n > publish.MaxMessageLen {
+			log.Fatalf("-publish-message is %d characters; the limit is %d", n, publish.MaxMessageLen)
+		}
+		// A publish is always a production build.
+		clean, isMinify = true, true
 	}
 
 	if isMinify {
@@ -426,6 +470,23 @@ func main() {
 			fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true).Render("Build errors:"))
 			fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render(formatErrorMsg(err.Error(), sg.SitePath)))
 			os.Exit(1)
+		}
+		if isPublish {
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+			defer stop()
+			_, err := publish.New(os.Stdout).Publish(ctx, publish.Options{
+				Name:      publishName,
+				Confirmed: publishConfirmed,
+				SitePath:  sitePath,
+				PublicDir: pubPath,
+				Message:   pubMessage,
+				Device:    pubDevice,
+			})
+			if err != nil {
+				fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render(err.Error()))
+				stop()
+				os.Exit(1)
+			}
 		}
 		return
 	}
@@ -789,6 +850,13 @@ func excluded(pattern, path string) bool {
 	return m
 }
 
+// notInStarter are files of the sitegen.dev site that -create leaves out: they
+// belong to sitegen.dev, not to a new site.
+var notInStarter = map[string]bool{
+	"site/" + publish.ConfigFile:     true, // where sitegen.dev itself publishes
+	"site/src/altengine-client.json": true, // sitegen's altengine client ID
+}
+
 func copySite(folder, target string) error {
 	entries, err := siteFS.ReadDir(folder)
 	if err != nil {
@@ -796,6 +864,9 @@ func copySite(folder, target string) error {
 	}
 	for _, entry := range entries {
 		p := path.Join(folder, entry.Name())
+		if notInStarter[p] {
+			continue
+		}
 		if entry.IsDir() {
 			if err := copySite(p, target); err != nil {
 				return err

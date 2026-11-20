@@ -21,9 +21,9 @@
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="{{path "/img/favicon.svg"}}" type="image/svg+xml">
 <link rel="alternate" type="application/atom+xml" title="{{$site.title}} blog" href="{{path "/feed.xml"}}">
-<link rel="stylesheet" href="{{path "/css/styles.css"}}?v={{.BuildID}}">
+<link rel="stylesheet" href="{{path "/css/styles.css"}}?v={{hash "/css/styles.css"}}">
 <script>try{var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
-<script src="{{path "/js/main.js"}}?v={{.BuildID}}" defer></script>
+<script src="{{path "/js/main.js"}}?v={{hash "/js/main.js"}}" defer></script>
 {{template "addHead" .}}
 {{end}}
 

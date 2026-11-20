@@ -1,0 +1,7 @@
+{
+  "client_id": "https://sitegen.dev/altengine-client.json",
+  "client_name": "sitegen",
+  "client_uri": "https://sitegen.dev",
+  "redirect_uris": ["http://127.0.0.1/callback"],
+  "token_endpoint_auth_method": "none"
+}

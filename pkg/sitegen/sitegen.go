@@ -3,6 +3,8 @@ package sitegen
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -191,6 +193,7 @@ func (sg *SiteGen) tplFuncs() map[string]interface{} {
 		"limit":    limit,
 		"offset":   offset,
 		"path":     sg.Path,
+		"hash":     sg.Hash,
 		"sources":  sg.GetSources,
 		"data":     sg.Data,
 		"json":     parseJSON,
@@ -648,6 +651,22 @@ func (sg *SiteGen) Path(path string) string {
 	return sg.BasePath + strings.TrimLeft(path, "/")
 }
 
+// Hash returns a short content hash of a file in the source folder, named by
+// its URL path ("/css/styles.css"), for cache-busting asset URLs. Unlike
+// .BuildID it only changes when that file does, so unchanged pages build to
+// the same bytes and a publish skips them. It returns "" (and logs) when the
+// file can't be read.
+func (sg *SiteGen) Hash(path string) string {
+	local := filepath.Join(sg.SitePath, sg.SourceDir, filepath.FromSlash(strings.TrimLeft(path, "/")))
+	b, err := os.ReadFile(local)
+	if err != nil {
+		log.Println("hash failed", local, err)
+		return ""
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])[:10]
+}
+
 func (sg *SiteGen) Data(name string) interface{} {
 	path := filepath.Join(sg.SitePath, sg.DataDir, name)
 	data, err := os.ReadFile(path)
@@ -692,7 +711,9 @@ func (sg *SiteGen) GetSources(prop string, pattern string) []*Source {
 			filtered = append(filtered, s)
 		}
 	}
-
+	// sg.sources is a map: give the result a fixed order so templates (and
+	// sort ties) render the same bytes on every build.
+	sort.Slice(filtered, func(i, j int) bool { return filtered[i].Local < filtered[j].Local })
 	return filtered
 }
 
@@ -780,7 +801,8 @@ func sortBy(prop string, order string, list interface{}) (result []interface{}) 
 
 	sorted := reflect.MakeSlice(rv.Type(), rv.Len(), rv.Len())
 	reflect.Copy(sorted, rv)
-	sort.Slice(sorted.Interface(), func(i, j int) bool {
+	// Stable, so equal keys keep the (deterministic) input order.
+	sort.SliceStable(sorted.Interface(), func(i, j int) bool {
 		if order == "desc" {
 			return valueOf(prop, sorted.Index(i)) > valueOf(prop, sorted.Index(j))
 		}

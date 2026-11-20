@@ -25,6 +25,12 @@ sitegen/
 │   │   └── funcs.go        # Custom template functions (sources, sort, paginate, etc.)
 │   ├── share/              # Client for -share feature
 │   │   └── client.go       # Connects to the relay, serves tunnelled HTTP over one WebSocket
+│   ├── publish/            # -publish: Sign in with altengine and the static deploy API
+│   │   ├── auth.go         # Browser (PKCE, loopback) and device sign-in, revoke
+│   │   ├── api.go          # api.altengine.net: /v1/static and one-shot MCP tools/call
+│   │   ├── deploy.go       # Manifest (path → sha256, size), limits, parallel signed uploads
+│   │   ├── store.go        # Key storage (OS keyring, 0600 file fallback), site/publish.json
+│   │   └── publish.go      # Key resolution, find-or-create the instance, deploy, sign out
 │   └── server/             # Shared server utilities
 ├── site/                   # sitegen.dev, and the starter copied by -create (embedded in the binary)
 │   ├── src/                # Source HTML/MD/CSS/JS files
@@ -42,6 +48,7 @@ sitegen/
 - **Data Files**: JSON loaded from a `data/` directory
 - **Dev Server**: Built-in HTTP server with SSE-based live reload and file watching (`fsnotify`)
 - **TUI**: Interactive terminal UI using `charmbracelet/bubbletea` and `lipgloss`
+- **Publish Feature**: `-publish` deploys `public/` to altengine static hosting over plain HTTP (no SDK). The contract is https://www.altengine.net/docs/sign-in-with-altengine/ and https://www.altengine.net/docs/static/. Sign-in asks for `static:full:sitegen-*`, so every instance sitegen creates is `sitegen-<name>` and one key per machine covers them all (signing in again from the same device replaces the earlier key, so per-site keys can't work). sitegen's OAuth client ID is `https://sitegen.dev/altengine-client.json`, served from `site/src/altengine-client.json`; it must stay at that exact URL (altengine follows no redirects) and `-create` leaves it out of new sites.
 - **Share Feature**: Public URL tunneling over one WebSocket (`coder/websocket`) to a Cloudflare Worker relay in `worker/`. Protocol v1 is in `docs/SHARE_PROTOCOL.md`; the Go client, the Worker, and that doc must change together. Tunnelled requests go through `server.ShareHandler`, which hides `/__cms` and swaps SSE live reload for the relay's WebSocket endpoint.
 
 ## Key Conventions
@@ -60,6 +67,9 @@ sitegen -serve
 
 # Production build
 sitegen -clean -minify
+
+# Build and publish to altengine static hosting (ALTENGINE_API_KEY in CI)
+sitegen -publish
 
 # Build the binary
 go build -o sitegen .
@@ -89,6 +99,7 @@ The following custom functions are available in templates:
 | `pages` | `pages source` | Returns `[]Page` for pagination links (`.Path`, `.Page`, `.Active`) |
 | `page` | `page "source" "slug"` | Creates a dynamically generated page, returns its path |
 | `path` | `path "/url"` | Prefixes with base path (`-base` flag) |
+| `hash` | `hash "/file"` | Short SHA-256 of `src/<file>`; cache-busting that changes only when the file does |
 | `json` | `json value` | Serializes value to JSON string |
 | `html` | `html string` | Marks string as safe HTML |
 | `js` | `js string` | Marks string as safe JavaScript |

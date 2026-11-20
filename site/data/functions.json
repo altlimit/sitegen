@@ -88,6 +88,14 @@
         "example": "&lt;link rel=\"stylesheet\" href=\"{{ path \"/css/styles.css\" }}\"&gt;\n&lt;!-- with -base /docs/ this becomes /docs/css/styles.css --&gt;"
     },
     {
+        "name": "hash",
+        "group": "Pages",
+        "signature": "hash \"/file\"",
+        "summary": "A short content hash of a source file, for cache-busting asset URLs.",
+        "description": "<p>Returns the first 10 hex characters of the SHA-256 of <code>src/&lt;file&gt;</code>. Add it to stylesheet and script URLs and browsers fetch a fresh copy when the file changes, and only then. Unlike <code>.BuildID</code>, pages stay byte-for-byte the same between builds when nothing changed, so <code>-publish</code> doesn't upload them again.</p><p>It hashes the source file, so for a file with a <code>build:</code> command the hash follows the source, not the command's output. If the file can't be read, the error is logged and the result is empty.</p>",
+        "example": "&lt;link rel=\"stylesheet\" href=\"{{ path \"/css/styles.css\" }}?v={{ hash \"/css/styles.css\" }}\"&gt;\n&lt;!-- /css/styles.css?v=3f2a91bc4d --&gt;"
+    },
+    {
         "name": "json",
         "group": "Helpers",
         "signature": "json value",

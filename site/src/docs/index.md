@@ -56,6 +56,14 @@ sitegen -clean -minify
 
 `-clean` empties `public/` before building, and `-minify` minifies HTML, CSS and JavaScript. Upload the `public/` folder to any static host. See [Deploying](/docs/deploy).
 
+Or build and publish in one step to altengine static hosting:
+
+```bash
+sitegen -publish
+```
+
+The first run signs you in to altengine in the browser and creates the site. Later runs upload only what changed and print the live URL. See [Deploying](/docs/deploy#altengine).
+
 ## Project layout
 
 ```text
